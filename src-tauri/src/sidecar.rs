@@ -72,16 +72,16 @@ impl SidecarManager {
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Failed to parse sidecar response: {} — line: {}", e, line);
+                                log::error!("Failed to parse sidecar response: {} — line: {}", e, line);
                             }
                         }
                     }
                     CommandEvent::Stderr(err_bytes) => {
                         let err = String::from_utf8_lossy(&err_bytes);
-                        eprintln!("Sidecar stderr: {}", err);
+                        log::warn!("Sidecar stderr: {}", err);
                     }
                     CommandEvent::Terminated(payload) => {
-                        eprintln!("Sidecar terminated with code: {:?}", payload.code);
+                        log::info!("Sidecar terminated with code: {:?}", payload.code);
                         // Mark as not running and clear child handle
                         running.store(false, Ordering::SeqCst);
                         *child_handle.lock().await = None;

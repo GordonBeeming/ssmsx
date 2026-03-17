@@ -4,6 +4,8 @@ mod commands;
 use tauri::Manager;
 
 pub fn run() {
+    let _ = env_logger::try_init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
@@ -14,14 +16,23 @@ pub fn run() {
             let manager = sidecar_manager.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = manager.start(&handle).await {
-                    eprintln!("Failed to start sidecar: {}", e);
+                    log::error!("Failed to start sidecar: {}", e);
                 }
             });
 
             app.manage(sidecar_manager);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::ping::ping])
+        .invoke_handler(tauri::generate_handler![
+            commands::ping::ping,
+            commands::connection::connection_list,
+            commands::connection::connection_get,
+            commands::connection::connection_save,
+            commands::connection::connection_delete,
+            commands::connection::connection_test,
+            commands::connection::connection_connect,
+            commands::connection::connection_disconnect,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

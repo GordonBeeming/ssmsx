@@ -2,7 +2,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <PublishAot>true</PublishAot>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <SuppressAotAnalysisWarnings>true</SuppressAotAnalysisWarnings>
+    <InvariantGlobalization>false</InvariantGlobalization>
     <StripSymbols>true</StripSymbols>
   </PropertyGroup>
   <ItemGroup>
