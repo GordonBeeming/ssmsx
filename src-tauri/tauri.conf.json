@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/tauri-v2.10.3/crates/tauri-config-schema/schema.json",
   "productName": "SSMSX",
   "version": "0.1.0",
   "identifier": "com.ssmsx.app",
