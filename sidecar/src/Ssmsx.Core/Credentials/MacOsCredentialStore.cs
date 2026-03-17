@@ -50,18 +50,12 @@ public class MacOsCredentialStore : ICredentialStore
 
     private static async Task<ProcessResult> RunProcessWithArgsAsync(string fileName, string[] args)
     {
-        return await RunProcessWithStdinAsync(fileName, arguments, null);
-    }
-
-    private static async Task<ProcessResult> RunProcessWithStdinAsync(string fileName, string arguments, string? stdin)
-    {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = fileName,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            RedirectStandardInput = stdin is not null,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
@@ -71,12 +65,6 @@ public class MacOsCredentialStore : ICredentialStore
         }
 
         process.Start();
-
-        if (stdin is not null)
-        {
-            await process.StandardInput.WriteAsync(stdin);
-            process.StandardInput.Close();
-        }
 
         var stdOutTask = process.StandardOutput.ReadToEndAsync();
         var stdErrTask = process.StandardError.ReadToEndAsync();
