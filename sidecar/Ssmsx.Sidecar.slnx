@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ssmsx.Core/Ssmsx.Core.csproj" />
+    <Project Path="src/Ssmsx.Protocol/Ssmsx.Protocol.csproj" />
+    <Project Path="src/Ssmsx.Sidecar/Ssmsx.Sidecar.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ssmsx.Core.Tests/Ssmsx.Core.Tests.csproj" />
+    <Project Path="tests/Ssmsx.Protocol.Tests/Ssmsx.Protocol.Tests.csproj" />
+  </Folder>
+</Solution>

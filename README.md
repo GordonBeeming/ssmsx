@@ -92,4 +92,4 @@ See [docs/SPEC.md](docs/SPEC.md) for the full specification and milestone plan. 
 
 ## License
 
-TBD
+[FSL-1.1-MIT](LICENSE) — Functional Source License, Version 1.1, with MIT Future License
