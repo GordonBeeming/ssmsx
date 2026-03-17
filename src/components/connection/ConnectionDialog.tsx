@@ -17,14 +17,14 @@ export function ConnectionDialog() {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    if (dialogOpen) {
-      dialogRef.current?.showModal();
-    } else {
-      dialogRef.current?.close();
+    const el = dialogRef.current;
+    if (!el) return;
+    if (dialogOpen && !el.open) {
+      el.showModal();
+    } else if (!dialogOpen && el.open) {
+      el.close();
     }
   }, [dialogOpen]);
-
-  if (!dialogOpen) return null;
 
   return (
     <dialog
@@ -37,6 +37,8 @@ export function ConnectionDialog() {
         <div className="flex items-center justify-between border-b border-bg-tertiary px-4 py-3">
           <h2 className="text-base font-semibold">Connect to Server</h2>
           <button
+            type="button"
+            aria-label="Close"
             onClick={closeDialog}
             className="border-none bg-transparent p-1 text-lg text-text-secondary hover:text-text-primary"
           >

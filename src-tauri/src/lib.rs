@@ -4,7 +4,7 @@ mod commands;
 use tauri::Manager;
 
 pub fn run() {
-    env_logger::init();
+    let _ = env_logger::try_init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())

@@ -62,10 +62,10 @@ export function PropertiesTab() {
   ].slice(0, 10);
 
   const buildConnectionInfo = (): ConnectionInfo => ({
+    ...form,
     id: selectedConnection?.id || crypto.randomUUID(),
     createdAt: selectedConnection?.createdAt || new Date().toISOString(),
     lastUsed: selectedConnection?.lastUsed,
-    ...form,
   });
 
   const handleTest = async () => {
@@ -76,7 +76,10 @@ export function PropertiesTab() {
   const handleConnect = async () => {
     if (!form.serverName) return;
     const info = buildConnectionInfo();
-    await saveConnection(info, rememberPassword ? password || undefined : undefined);
+    const infoToSave = rememberPassword
+      ? info
+      : { ...info, credentialRef: undefined };
+    await saveConnection(infoToSave, rememberPassword ? password || undefined : undefined);
     await connect(info.id);
   };
 

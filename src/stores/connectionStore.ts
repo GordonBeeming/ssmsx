@@ -52,7 +52,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   loadConnections: async () => {
     try {
       const connections = await connectionList();
-      set({ connections });
+      set({ connections, error: null });
     } catch (e) {
       set({ error: String(e) });
     }

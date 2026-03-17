@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState, useCallback } from "react";
 import type { ConnectionInfo } from "../../commands/connection";
 import { useConnectionStore } from "../../stores/connectionStore";

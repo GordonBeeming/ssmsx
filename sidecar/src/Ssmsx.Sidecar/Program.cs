@@ -39,18 +39,21 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
     {
         var args = Deserialize<ConnectionSaveParams>(p, ProtocolJsonContext.Default.ConnectionSaveParams);
         // Store password in keychain if provided
+        ConnectionInfo saved;
         if (!string.IsNullOrEmpty(args.Password))
         {
             var credKey = $"ssmsx/{args.Connection.Id}";
             await credentialStore.StoreAsync(credKey, args.Password);
             // Save connection with credential reference
-            await connectionStore.SaveAsync(args.Connection with { CredentialRef = credKey });
+            saved = args.Connection with { CredentialRef = credKey };
+            await connectionStore.SaveAsync(saved);
         }
         else
         {
-            await connectionStore.SaveAsync(args.Connection);
+            saved = args.Connection;
+            await connectionStore.SaveAsync(saved);
         }
-        return JsonSerializer.SerializeToElement(args.Connection, ProtocolJsonContext.Default.ConnectionInfo);
+        return JsonSerializer.SerializeToElement(saved, ProtocolJsonContext.Default.ConnectionInfo);
     },
 
     ["connection.delete"] = async p =>

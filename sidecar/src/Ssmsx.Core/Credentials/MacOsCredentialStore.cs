@@ -8,7 +8,10 @@ public class MacOsCredentialStore : ICredentialStore
 
     public async Task StoreAsync(string key, string secret)
     {
-        var result = await RunProcessAsync("security", $"add-generic-password -a {Account} -s {key} -w {secret} -U");
+        var result = await RunProcessWithStdinAsync(
+            "security",
+            $"add-generic-password -a {Account} -s {key} -w -U",
+            secret);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
@@ -47,6 +50,11 @@ public class MacOsCredentialStore : ICredentialStore
 
     private static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments)
     {
+        return await RunProcessWithStdinAsync(fileName, arguments, null);
+    }
+
+    private static async Task<ProcessResult> RunProcessWithStdinAsync(string fileName, string arguments, string? stdin)
+    {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
@@ -54,11 +62,18 @@ public class MacOsCredentialStore : ICredentialStore
             Arguments = arguments,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = stdin is not null,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
 
         process.Start();
+
+        if (stdin is not null)
+        {
+            await process.StandardInput.WriteAsync(stdin);
+            process.StandardInput.Close();
+        }
 
         var stdOutTask = process.StandardOutput.ReadToEndAsync();
         var stdErrTask = process.StandardError.ReadToEndAsync();

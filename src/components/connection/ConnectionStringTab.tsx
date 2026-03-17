@@ -7,17 +7,17 @@ function parseConnectionString(cs: string): Partial<ConnectionInfo> {
   for (const segment of cs.split(";")) {
     const eqIdx = segment.indexOf("=");
     if (eqIdx > 0) {
-      const key = segment.substring(0, eqIdx).trim().toLowerCase();
+      const key = segment.substring(0, eqIdx).trim().toLowerCase().replace(/\s+/g, "");
       const value = segment.substring(eqIdx + 1).trim();
       parts[key] = value;
     }
   }
 
   const serverName =
-    parts["server"] || parts["data source"] || parts["addr"] || "";
+    parts["server"] || parts["datasource"] || parts["addr"] || "";
   const database =
-    parts["database"] || parts["initial catalog"] || "";
-  const username = parts["user id"] || parts["uid"] || "";
+    parts["database"] || parts["initialcatalog"] || "";
+  const username = parts["userid"] || parts["uid"] || "";
   const encrypt = parts["encrypt"]?.toLowerCase();
   const trust =
     parts["trustservercertificate"]?.toLowerCase() === "true";
@@ -26,8 +26,7 @@ function parseConnectionString(cs: string): Partial<ConnectionInfo> {
   if (encrypt === "optional" || encrypt === "false") encryptMode = "Optional";
   else if (encrypt === "strict") encryptMode = "Strict";
 
-  let authType: AuthType = "SqlAuth";
-  if (username) authType = "SqlAuth";
+  const authType: AuthType = username ? "SqlAuth" : "ConnectionString";
 
   return {
     serverName,
@@ -80,14 +79,17 @@ export function ConnectionStringTab() {
 
   const handleConnect = async () => {
     if (!cs.trim()) return;
+    const parsed = parseConnectionString(cs);
     const info: ConnectionInfo = {
       id: selectedConnection?.id || crypto.randomUUID(),
       name: selectedConnection?.name || "",
-      serverName: "connection-string",
+      serverName: parsed.serverName || "",
       authType: "ConnectionString",
-      encrypt: "Mandatory",
-      trustServerCertificate: false,
+      encrypt: parsed.encrypt || "Mandatory",
+      trustServerCertificate: parsed.trustServerCertificate || false,
       connectionString: cs,
+      database: parsed.database,
+      username: parsed.username,
       createdAt: selectedConnection?.createdAt || new Date().toISOString(),
     };
     await saveConnection(info);
