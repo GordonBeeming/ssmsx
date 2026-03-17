@@ -43,7 +43,7 @@ function App() {
 
         <button
           onClick={openDialog}
-          className="rounded bg-accent px-3 py-1 text-sm text-text-primary hover:bg-accent-hover"
+          className="rounded bg-accent px-3 py-1 text-sm text-accent-text hover:bg-accent-hover"
         >
           {activeConnection ? "Change Connection" : "Connect"}
         </button>
@@ -58,7 +58,7 @@ function App() {
             </p>
             <button
               onClick={openDialog}
-              className="mt-4 rounded bg-accent px-6 py-2 text-text-primary hover:bg-accent-hover"
+              className="mt-4 rounded bg-accent px-6 py-2 text-accent-text hover:bg-accent-hover"
             >
               New Connection
             </button>

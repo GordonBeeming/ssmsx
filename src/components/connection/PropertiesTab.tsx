@@ -245,7 +245,7 @@ export function PropertiesTab() {
         <button
           onClick={handleConnect}
           disabled={loading || !form.serverName}
-          className="rounded bg-accent px-4 py-1.5 text-sm text-text-primary hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded bg-accent px-4 py-1.5 text-sm text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "Connecting..." : "Connect"}
         </button>
