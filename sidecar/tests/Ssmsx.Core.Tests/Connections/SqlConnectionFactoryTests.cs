@@ -26,6 +26,7 @@ public class SqlConnectionFactoryTests
     }
 
     [Fact]
+    [Trait("Category", "Integration")]
     public async Task CreateAsync_EntraMfa_AttemptsTokenAcquisition()
     {
         var info = new ConnectionInfo
@@ -36,10 +37,9 @@ public class SqlConnectionFactoryTests
 
         var store = new FakeCredentialStore();
 
-        // EntraMfa is now supported — it will attempt interactive token acquisition
-        // which fails in headless/test environments. Use a short cancellation timeout
-        // to avoid hanging.
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        // EntraMfa attempts interactive token acquisition (opens a browser),
+        // so this test is integration-only. Use a short cancellation to avoid hanging.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         var ex = await Assert.ThrowsAnyAsync<Exception>(
             () => _factory.CreateAsync(info, store, ct: cts.Token));
         Assert.IsNotType<NotSupportedException>(ex);
