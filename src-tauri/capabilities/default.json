@@ -1,0 +1,11 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for SSMSX",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-spawn",
+    "shell:allow-execute",
+    "shell:default"
+  ]
+}

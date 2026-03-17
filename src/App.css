@@ -1,0 +1,79 @@
+:root {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #e0e0e0;
+  background-color: #1a1a2e;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.25rem;
+  color: #ffffff;
+}
+
+.subtitle {
+  color: #888;
+  margin-bottom: 2rem;
+}
+
+.card {
+  padding: 2rem;
+  border-radius: 8px;
+  background: #16213e;
+  border: 1px solid #0f3460;
+}
+
+button {
+  padding: 0.75rem 2rem;
+  border-radius: 6px;
+  border: 1px solid #0f3460;
+  background: #0f3460;
+  color: #e0e0e0;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button:hover {
+  background: #1a4a8a;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.response {
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.response pre, .error pre {
+  background: #0a0a1a;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.9rem;
+}
+
+.error {
+  margin-top: 1.5rem;
+  text-align: left;
+  color: #ff6b6b;
+}
+
+h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin-bottom: 0.5rem;
+}

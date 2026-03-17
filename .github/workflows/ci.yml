@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.os-name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os-name: Linux
+            dotnet-rid: linux-x64
+            sidecar-triple: x86_64-unknown-linux-gnu
+            sidecar-ext: ""
+          - os: macos-latest
+            os-name: macOS
+            dotnet-rid: osx-arm64
+            sidecar-triple: aarch64-apple-darwin
+            sidecar-ext: ""
+          - os: windows-latest
+            os-name: Windows
+            dotnet-rid: win-x64
+            sidecar-triple: x86_64-pc-windows-msvc
+            sidecar-ext: ".exe"
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Toolchains ───────────────────────────────────────────
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # ── Linux system dependencies ────────────────────────────
+      - name: Install Tauri system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      # ── Caching ──────────────────────────────────────────────
+      - name: Cache Cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # ── Frontend ─────────────────────────────────────────────
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build
+
+      # ── .NET sidecar ─────────────────────────────────────────
+      - name: Build .NET sidecar
+        run: dotnet build sidecar/Ssmsx.Sidecar.slnx
+
+      - name: Run .NET tests
+        run: dotnet test sidecar/Ssmsx.Sidecar.slnx
+
+      - name: Publish sidecar (${{ matrix.dotnet-rid }})
+        run: dotnet publish sidecar/src/Ssmsx.Sidecar -c Release -r ${{ matrix.dotnet-rid }}
+
+      - name: Copy sidecar binary to src-tauri/sidecars/
+        shell: bash
+        run: |
+          mkdir -p src-tauri/sidecars
+          src="sidecar/src/Ssmsx.Sidecar/bin/Release/net10.0/${{ matrix.dotnet-rid }}/publish/Ssmsx.Sidecar${{ matrix.sidecar-ext }}"
+          dst="src-tauri/sidecars/ssmsx-sidecar-${{ matrix.sidecar-triple }}${{ matrix.sidecar-ext }}"
+          cp "$src" "$dst"
+          echo "Copied sidecar to $dst"
+
+      # ── Tauri / Rust ─────────────────────────────────────────
+      - name: Build Tauri (cargo build)
+        run: cargo build --manifest-path src-tauri/Cargo.toml
