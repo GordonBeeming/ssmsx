@@ -34,6 +34,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     >
       {items.map((item) => (
         <button
+          type="button"
           key={item.label}
           className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary ${
             item.danger ? "text-error" : "text-text-primary"

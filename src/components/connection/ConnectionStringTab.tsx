@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ConnectionInfo, AuthType, EncryptMode } from "../../commands/connection";
 import { useConnectionStore } from "../../stores/connectionStore";
 
@@ -50,6 +50,11 @@ export function ConnectionStringTab() {
 
   const [cs, setCs] = useState(selectedConnection?.connectionString || "");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCs(selectedConnection?.connectionString || "");
+    setError(null);
+  }, [selectedConnection]);
 
   const handleParse = () => {
     if (!cs.trim()) return;

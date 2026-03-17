@@ -50,7 +50,12 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         }
         else
         {
-            saved = args.Connection;
+            // If connection previously had a stored credential but password is now empty, clean up
+            if (!string.IsNullOrEmpty(args.Connection.CredentialRef))
+            {
+                try { await credentialStore.DeleteAsync(args.Connection.CredentialRef); } catch { /* ignore */ }
+            }
+            saved = args.Connection with { CredentialRef = null };
             await connectionStore.SaveAsync(saved);
         }
         return JsonSerializer.SerializeToElement(saved, ProtocolJsonContext.Default.ConnectionInfo);

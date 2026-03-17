@@ -46,8 +46,10 @@ export function PropertiesTab() {
         color: selectedConnection.color,
         credentialRef: selectedConnection.credentialRef,
       });
-      setPassword("");
+    } else {
+      setForm(DEFAULT_CONNECTION);
     }
+    setPassword("");
   }, [selectedConnection]);
 
   const update = <K extends keyof typeof form>(
