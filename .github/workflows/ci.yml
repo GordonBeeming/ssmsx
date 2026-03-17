@@ -106,6 +106,10 @@ jobs:
           cp "$src" "$dst"
           echo "Copied sidecar to $dst"
 
+      # ── Tauri CLI ──────────────────────────────────────────────
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2"
+
       # ── Tauri / Rust ─────────────────────────────────────────
-      - name: Build Tauri (cargo build)
-        run: cargo build --manifest-path src-tauri/Cargo.toml
+      - name: Build Tauri app
+        run: cargo tauri build

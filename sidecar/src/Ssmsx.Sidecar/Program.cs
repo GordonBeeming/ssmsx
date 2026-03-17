@@ -26,6 +26,13 @@ while ((line = Console.ReadLine()) is not null)
         var request = JsonSerializer.Deserialize(line, ProtocolJsonContext.Default.JsonRpcRequest);
         if (request is null)
         {
+            response = new JsonRpcResponse
+            {
+                Id = "unknown",
+                Error = new JsonRpcError { Code = "INVALID_REQUEST", Message = "Deserialized request was null" }
+            };
+            var nullJson = JsonSerializer.Serialize(response, ProtocolJsonContext.Default.JsonRpcResponse);
+            await writer.WriteLineAsync(nullJson);
             continue;
         }
 

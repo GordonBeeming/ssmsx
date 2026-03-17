@@ -8,9 +8,21 @@ $Triple = (rustc -vV | Select-String "host:").ToString().Split(" ")[1]
 
 Write-Host "Building sidecar for $Triple..."
 
-# Build the sidecar
+# Map Rust triple to .NET RID
+$RID = switch ($Triple) {
+    "x86_64-pc-windows-msvc"     { "win-x64" }
+    "aarch64-pc-windows-msvc"    { "win-arm64" }
+    "x86_64-apple-darwin"        { "osx-x64" }
+    "aarch64-apple-darwin"       { "osx-arm64" }
+    "x86_64-unknown-linux-gnu"   { "linux-x64" }
+    "aarch64-unknown-linux-gnu"  { "linux-arm64" }
+    default { throw "Unknown triple: $Triple" }
+}
+
+# Build the sidecar with RID for AOT publish
 dotnet publish "$RootDir\sidecar\src\Ssmsx.Sidecar" `
   -c Debug `
+  -r $RID `
   -o "$RootDir\sidecar\bin\Debug\publish"
 
 # Create sidecars directory

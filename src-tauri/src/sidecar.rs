@@ -76,6 +76,11 @@ impl SidecarManager {
                     }
                     CommandEvent::Terminated(payload) => {
                         eprintln!("Sidecar terminated with code: {:?}", payload.code);
+                        // Drain all pending requests so callers fail fast
+                        let mut pending = pending.lock().await;
+                        for (_, sender) in pending.drain() {
+                            let _ = sender.send(Err("Sidecar process terminated".to_string()));
+                        }
                         break;
                     }
                     _ => {}
@@ -103,11 +108,7 @@ impl SidecarManager {
 
         let (tx, rx) = oneshot::channel();
 
-        {
-            let mut pending = self.pending.lock().await;
-            pending.insert(id.clone(), tx);
-        }
-
+        // Write to sidecar first, only insert into pending after successful write
         {
             let mut child_lock = self.child.lock().await;
             if let Some(child) = child_lock.as_mut() {
@@ -117,6 +118,11 @@ impl SidecarManager {
             } else {
                 return Err("Sidecar not running".to_string());
             }
+        }
+
+        {
+            let mut pending = self.pending.lock().await;
+            pending.insert(id.clone(), tx);
         }
 
         // Wait for response with timeout
