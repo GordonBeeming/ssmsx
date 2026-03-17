@@ -8,10 +8,8 @@ public class MacOsCredentialStore : ICredentialStore
 
     public async Task StoreAsync(string key, string secret)
     {
-        var result = await RunProcessWithStdinAsync(
-            "security",
-            $"add-generic-password -a {Account} -s {key} -w -U",
-            secret);
+        var result = await RunProcessWithArgsAsync("security",
+            ["add-generic-password", "-a", Account, "-s", key, "-w", secret, "-U"]);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
@@ -21,7 +19,8 @@ public class MacOsCredentialStore : ICredentialStore
 
     public async Task<string?> RetrieveAsync(string key)
     {
-        var result = await RunProcessAsync("security", $"find-generic-password -a {Account} -s {key} -w");
+        var result = await RunProcessWithArgsAsync("security",
+            ["find-generic-password", "-a", Account, "-s", key, "-w"]);
         if (result.ExitCode == 44)
         {
             return null;
@@ -39,7 +38,8 @@ public class MacOsCredentialStore : ICredentialStore
 
     public async Task DeleteAsync(string key)
     {
-        var result = await RunProcessAsync("security", $"delete-generic-password -a {Account} -s {key}");
+        var result = await RunProcessWithArgsAsync("security",
+            ["delete-generic-password", "-a", Account, "-s", key]);
         // Ignore "not found" errors — the credential may not exist
         if (result.ExitCode != 0 && !result.StdErr.Contains("could not be found", StringComparison.OrdinalIgnoreCase))
         {
@@ -48,32 +48,23 @@ public class MacOsCredentialStore : ICredentialStore
         }
     }
 
-    private static async Task<ProcessResult> RunProcessAsync(string fileName, string arguments)
-    {
-        return await RunProcessWithStdinAsync(fileName, arguments, null);
-    }
-
-    private static async Task<ProcessResult> RunProcessWithStdinAsync(string fileName, string arguments, string? stdin)
+    private static async Task<ProcessResult> RunProcessWithArgsAsync(string fileName, string[] args)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = fileName,
-            Arguments = arguments,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            RedirectStandardInput = stdin is not null,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        foreach (var arg in args)
+        {
+            process.StartInfo.ArgumentList.Add(arg);
+        }
 
         process.Start();
-
-        if (stdin is not null)
-        {
-            await process.StandardInput.WriteAsync(stdin);
-            process.StandardInput.Close();
-        }
 
         var stdOutTask = process.StandardOutput.ReadToEndAsync();
         var stdErrTask = process.StandardError.ReadToEndAsync();

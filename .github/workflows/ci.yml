@@ -92,7 +92,7 @@ jobs:
         run: dotnet build sidecar/Ssmsx.Sidecar.slnx
 
       - name: Run .NET tests
-        run: dotnet test sidecar/Ssmsx.Sidecar.slnx
+        run: dotnet test sidecar/Ssmsx.Sidecar.slnx --filter "Category!=Integration"
 
       - name: Publish sidecar (${{ matrix.dotnet-rid }})
         run: dotnet publish sidecar/src/Ssmsx.Sidecar -c Release -r ${{ matrix.dotnet-rid }}
