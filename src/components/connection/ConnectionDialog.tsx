@@ -30,7 +30,7 @@ export function ConnectionDialog() {
     <dialog
       ref={dialogRef}
       onCancel={closeDialog}
-      className="w-[700px] max-w-[90vw] rounded-lg border border-bg-tertiary bg-bg-primary p-0 text-text-primary shadow-xl backdrop:bg-black/50"
+      className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0 w-[700px] max-w-[90vw] rounded-lg border border-bg-tertiary bg-bg-primary p-0 text-text-primary shadow-xl backdrop:bg-black/50"
     >
       <div className="flex h-[500px] max-h-[80vh] flex-col">
         {/* Header */}
