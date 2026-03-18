@@ -22,10 +22,12 @@ pub async fn connection_save(
     sidecar: tauri::State<'_, SidecarManager>,
     connection: Value,
     password: Option<String>,
+    clear_credential: Option<bool>,
 ) -> Result<String, String> {
     let params = serde_json::json!({
         "connection": connection,
-        "password": password
+        "password": password,
+        "clearCredential": clear_credential.unwrap_or(false)
     });
     let result = sidecar.send_request("connection.save", Some(params)).await?;
     Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)

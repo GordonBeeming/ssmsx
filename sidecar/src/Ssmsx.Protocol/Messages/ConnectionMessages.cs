@@ -22,6 +22,9 @@ public record ConnectionSaveParams
 
     [JsonPropertyName("password")]
     public string? Password { get; init; }
+
+    [JsonPropertyName("clearCredential")]
+    public bool ClearCredential { get; init; }
 }
 
 public record ConnectionTestParams

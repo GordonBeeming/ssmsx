@@ -508,7 +508,17 @@ public partial class SchemaDiscoveryService
 
                 var typeSpec = typeName;
                 if (hasLength)
-                    typeSpec += maxLen == -1 ? "(MAX)" : $"({maxLen})";
+                {
+                    if (maxLen == -1)
+                        typeSpec += "(MAX)";
+                    else
+                    {
+                        // nchar/nvarchar store max_length in bytes (2 per char)
+                        var charLen = typeName.StartsWith("n", StringComparison.OrdinalIgnoreCase)
+                            ? maxLen / 2 : maxLen;
+                        typeSpec += $"({charLen})";
+                    }
+                }
                 else if (hasPrecision)
                     typeSpec += $"({precision}, {scale})";
 

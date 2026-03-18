@@ -50,19 +50,24 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
             saved = args.Connection with { CredentialRef = credKey };
             await connectionStore.SaveAsync(saved);
         }
+        else if (args.ClearCredential)
+        {
+            // Explicitly clear stored credential
+            var existing = await connectionStore.GetAsync(args.Connection.Id);
+            if (existing?.CredentialRef != null)
+            {
+                try { await credentialStore.DeleteAsync(existing.CredentialRef); } catch { /* ignore */ }
+            }
+            saved = args.Connection with { CredentialRef = null };
+            await connectionStore.SaveAsync(saved);
+        }
         else
         {
-            // No new password provided — preserve existing credential if present
+            // No new password and no clear request — preserve existing credential
             var existing = await connectionStore.GetAsync(args.Connection.Id);
-            if (existing?.CredentialRef != null && args.Connection.CredentialRef == null)
+            if (existing?.CredentialRef != null)
             {
-                // Connection already has stored credentials, preserve them
                 saved = args.Connection with { CredentialRef = existing.CredentialRef };
-            }
-            else if (!string.IsNullOrEmpty(args.Connection.CredentialRef))
-            {
-                // credentialRef explicitly set on the incoming connection, keep it
-                saved = args.Connection;
             }
             else
             {

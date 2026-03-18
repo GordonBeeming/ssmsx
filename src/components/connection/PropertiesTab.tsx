@@ -107,12 +107,14 @@ export function PropertiesTab() {
     const hasNewPassword = !!password;
     const needsSave = isNewConnection || hasNewPassword || !rememberPassword;
     if (needsSave) {
+      const wantsClear = !rememberPassword && !!selectedConnection?.credentialRef;
       const infoToSave = rememberPassword
         ? info
         : { ...info, credentialRef: undefined };
       await saveConnection(
         infoToSave,
-        rememberPassword && hasNewPassword ? password : undefined
+        rememberPassword && hasNewPassword ? password : undefined,
+        wantsClear
       );
     }
 

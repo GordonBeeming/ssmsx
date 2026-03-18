@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useExplorerStore } from "../../stores/explorerStore";
 import type { ExplorerNode } from "../../stores/explorerStore";
@@ -8,10 +8,13 @@ import { useExplorerContextMenu } from "./useExplorerContextMenu";
 import { ContextMenu } from "../ui/ContextMenu";
 
 export function ObjectExplorerTree() {
-  const visibleNodes = useExplorerStore((s) => s.getVisibleNodes)();
-  const stableVisibleNodes = useMemo(() => visibleNodes, [visibleNodes]);
+  // Subscribe to nodes/rootNodeIds so component re-renders when tree state changes
+  const _nodes = useExplorerStore((s) => s.nodes);
+  const _rootNodeIds = useExplorerStore((s) => s.rootNodeIds);
+  void _nodes; void _rootNodeIds;
+  const visibleNodes = useExplorerStore((s) => s.getVisibleNodes());
   const parentRef = useRef<HTMLDivElement>(null);
-  const handleKeyDown = useTreeKeyboard(stableVisibleNodes);
+  const handleKeyDown = useTreeKeyboard(visibleNodes);
   const getMenuItems = useExplorerContextMenu();
 
   const [contextMenu, setContextMenu] = useState<{
@@ -21,7 +24,7 @@ export function ObjectExplorerTree() {
   } | null>(null);
 
   const virtualizer = useVirtualizer({
-    count: stableVisibleNodes.length,
+    count: visibleNodes.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 26,
     overscan: 10,
@@ -56,7 +59,7 @@ export function ObjectExplorerTree() {
         onKeyDown={handleKeyDown}
         role="tree"
       >
-        {stableVisibleNodes.length === 0 ? (
+        {visibleNodes.length === 0 ? (
           <div className="p-3 text-xs text-text-secondary">
             No connections. Connect to a server to browse objects.
           </div>
@@ -69,7 +72,7 @@ export function ObjectExplorerTree() {
             }}
           >
             {virtualizer.getVirtualItems().map((virtualItem) => {
-              const { node, depth } = stableVisibleNodes[virtualItem.index];
+              const { node, depth } = visibleNodes[virtualItem.index];
               return (
                 <div
                   key={virtualItem.key}

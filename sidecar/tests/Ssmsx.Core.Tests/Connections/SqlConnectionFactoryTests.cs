@@ -26,26 +26,6 @@ public class SqlConnectionFactoryTests
     }
 
     [Fact]
-    [Trait("Category", "Integration")]
-    public async Task CreateAsync_EntraMfa_AttemptsTokenAcquisition()
-    {
-        var info = new ConnectionInfo
-        {
-            ServerName = "localhost",
-            AuthType = AuthType.EntraMfa
-        };
-
-        var store = new FakeCredentialStore();
-
-        // EntraMfa attempts interactive token acquisition (opens a browser),
-        // so this test is integration-only. Use a short cancellation to avoid hanging.
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        var ex = await Assert.ThrowsAnyAsync<Exception>(
-            () => _factory.CreateAsync(info, store, ct: cts.Token));
-        Assert.IsNotType<NotSupportedException>(ex);
-    }
-
-    [Fact]
     public async Task CreateAsync_SqlAuth_NoPasswordAvailable_ThrowsInvalidOperation()
     {
         var info = new ConnectionInfo

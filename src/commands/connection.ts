@@ -44,9 +44,10 @@ export async function connectionGet(id: string): Promise<ConnectionInfo | null> 
 
 export async function connectionSave(
   connection: ConnectionInfo,
-  password?: string
+  password?: string,
+  clearCredential?: boolean
 ): Promise<ConnectionInfo> {
-  const result = await invoke<string>("connection_save", { connection, password });
+  const result = await invoke<string>("connection_save", { connection, password, clearCredential: clearCredential ?? false });
   return JSON.parse(result);
 }
 

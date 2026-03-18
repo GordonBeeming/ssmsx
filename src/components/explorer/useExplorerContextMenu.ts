@@ -9,6 +9,11 @@ import {
 } from "../../commands/explorer";
 import type { ContextMenuItem } from "../ui/ContextMenu";
 
+/** Escape `]` as `]]` and wrap in brackets for safe SQL identifiers */
+function quoteSqlName(name: string): string {
+  return `[${name.replace(/\]/g, "]]")}]`;
+}
+
 export function useExplorerContextMenu() {
   const refreshNode = useExplorerStore((s) => s.refreshNode);
   const disconnect = useConnectionStore((s) => s.disconnect);
@@ -50,13 +55,13 @@ export function useExplorerContextMenu() {
                 node.name
               );
               const colsPerRow = 4;
-              const colNames = columns.map((c) => `[${c.name}]`);
+              const colNames = columns.map((c) => quoteSqlName(c.name));
               const rows: string[] = [];
               for (let i = 0; i < colNames.length; i += colsPerRow) {
                 rows.push("    " + colNames.slice(i, i + colsPerRow).join(", "));
               }
               const colList = rows.join(",\n");
-              const sql = `SELECT TOP 1000\n${colList}\nFROM [${node.database}].[${node.schema}].[${node.name}]`;
+              const sql = `SELECT TOP 1000\n${colList}\nFROM ${quoteSqlName(node.database!)}.${quoteSqlName(node.schema!)}.${quoteSqlName(node.name)}`;
               addTab({
                 id: crypto.randomUUID(),
                 connectionId: node.connectionId,
@@ -103,13 +108,13 @@ export function useExplorerContextMenu() {
                 node.name
               );
               const colsPerRow = 4;
-              const colNames = columns.map((c) => `[${c.name}]`);
+              const colNames = columns.map((c) => quoteSqlName(c.name));
               const rows: string[] = [];
               for (let i = 0; i < colNames.length; i += colsPerRow) {
                 rows.push("    " + colNames.slice(i, i + colsPerRow).join(", "));
               }
               const colList = rows.join(",\n");
-              const sql = `SELECT TOP 1000\n${colList}\nFROM [${node.database}].[${node.schema}].[${node.name}]`;
+              const sql = `SELECT TOP 1000\n${colList}\nFROM ${quoteSqlName(node.database!)}.${quoteSqlName(node.schema!)}.${quoteSqlName(node.name)}`;
               addTab({
                 id: crypto.randomUUID(),
                 connectionId: node.connectionId,

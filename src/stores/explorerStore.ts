@@ -321,7 +321,7 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
               loaded: false,
               children: [],
               parentId: node.id,
-              hasChildren: false,
+              hasChildren: true,
             });
           }
           break;
@@ -427,6 +427,32 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
           }
           break;
         }
+        case "table-columns": {
+          const columns = await explorerColumns(
+            connectionId,
+            db,
+            node.schema!,
+            node.tableName!
+          );
+          for (const col of columns) {
+            children.push({
+              id: makeNodeId(connectionId, "db", db, "col", node.schema!, node.tableName!, col.name),
+              connectionId,
+              type: "column",
+              name: col.name,
+              label: `${col.name} (${col.dataType}${col.isNullable ? ", null" : ""})`,
+              schema: node.schema,
+              database: db,
+              expanded: false,
+              loading: false,
+              loaded: false,
+              children: [],
+              parentId: node.id,
+              hasChildren: false,
+            });
+          }
+          break;
+        }
         case "table-keys": {
           const keys = await explorerKeys(
             connectionId,
@@ -502,25 +528,23 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
       const schema = node.schema!;
       const tableName = node.name;
 
-      // Columns
-      const columns = await explorerColumns(connectionId, db, schema, tableName);
-      for (const col of columns) {
-        children.push({
-          id: makeNodeId(connectionId, "db", db, "col", schema, tableName, col.name),
-          connectionId,
-          type: "column",
-          name: col.name,
-          label: `${col.name} (${col.dataType}${col.isNullable ? ", null" : ""})`,
-          schema,
-          database: db,
-          expanded: false,
-          loading: false,
-          loaded: false,
-          children: [],
-          parentId: node.id,
-          hasChildren: false,
-        });
-      }
+      // Columns folder
+      children.push({
+        id: makeNodeId(connectionId, "db", db, "table-columns", schema, tableName),
+        connectionId,
+        type: "folder",
+        name: "Columns",
+        database: db,
+        schema,
+        tableName,
+        expanded: false,
+        loading: false,
+        loaded: false,
+        children: [],
+        parentId: node.id,
+        hasChildren: true,
+        folderKind: "table-columns",
+      });
 
       // Keys folder
       children.push({
@@ -556,6 +580,31 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
         parentId: node.id,
         hasChildren: true,
         folderKind: "table-indexes",
+      });
+      break;
+    }
+
+    case "view": {
+      const db = node.database!;
+      const schema = node.schema!;
+      const viewName = node.name;
+
+      // Columns folder for views
+      children.push({
+        id: makeNodeId(connectionId, "db", db, "view-columns", schema, viewName),
+        connectionId,
+        type: "folder",
+        name: "Columns",
+        database: db,
+        schema,
+        tableName: viewName,
+        expanded: false,
+        loading: false,
+        loaded: false,
+        children: [],
+        parentId: node.id,
+        hasChildren: true,
+        folderKind: "table-columns",
       });
       break;
     }
