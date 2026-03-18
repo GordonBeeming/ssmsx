@@ -56,7 +56,14 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
             var existing = await connectionStore.GetAsync(args.Connection.Id);
             if (existing?.CredentialRef != null)
             {
-                try { await credentialStore.DeleteAsync(existing.CredentialRef); } catch { /* ignore */ }
+                try
+                {
+                    await credentialStore.DeleteAsync(existing.CredentialRef);
+                }
+                catch (Exception ex)
+                {
+                    await Console.Error.WriteLineAsync($"Warning: Failed to delete credential '{existing.CredentialRef}' for connection '{args.Connection.Id}': {ex.Message}");
+                }
             }
             saved = args.Connection with { CredentialRef = null };
             await connectionStore.SaveAsync(saved);
@@ -82,7 +89,14 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
     {
         var args = Deserialize<ConnectionDeleteParams>(p, ProtocolJsonContext.Default.ConnectionDeleteParams);
         // Try to delete credential from keychain
-        try { await credentialStore.DeleteAsync($"ssmsx/{args.Id}"); } catch { /* ignore */ }
+        try
+        {
+            await credentialStore.DeleteAsync($"ssmsx/{args.Id}");
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"Warning: Failed to delete credential for connection '{args.Id}': {ex.Message}");
+        }
         var deleted = await connectionStore.DeleteAsync(args.Id);
         return JsonSerializer.SerializeToElement(
             new ConnectionDeleteResult { Deleted = deleted },
@@ -205,6 +219,7 @@ while ((line = Console.ReadLine()) is not null)
         continue;
 
     JsonRpcResponse response;
+    string requestId = "unknown";
     try
     {
         var request = JsonSerializer.Deserialize(line, ProtocolJsonContext.Default.JsonRpcRequest);
@@ -219,6 +234,8 @@ while ((line = Console.ReadLine()) is not null)
             await writer.WriteLineAsync(nullJson);
             continue;
         }
+
+        requestId = request.Id;
 
         if (handlers.TryGetValue(request.Method, out var handler))
         {
@@ -246,7 +263,7 @@ while ((line = Console.ReadLine()) is not null)
     {
         response = new JsonRpcResponse
         {
-            Id = "unknown",
+            Id = requestId,
             Error = new JsonRpcError { Code = "INTERNAL_ERROR", Message = ex.Message }
         };
     }

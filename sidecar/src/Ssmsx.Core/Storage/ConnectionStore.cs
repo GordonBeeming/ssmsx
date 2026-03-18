@@ -89,12 +89,20 @@ public class ConnectionStore
         if (string.IsNullOrWhiteSpace(json))
             return new List<ConnectionInfo>();
 
-        return JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.ListConnectionInfo) ?? new List<ConnectionInfo>();
+        var connections = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.ListConnectionInfo);
+        if (connections is null)
+        {
+            await Console.Error.WriteLineAsync($"Warning: Failed to deserialize connections from {_filePath}, returning empty list");
+            return new List<ConnectionInfo>();
+        }
+        return connections;
     }
 
     private async Task WriteFileAsync(List<ConnectionInfo> connections)
     {
         var json = JsonSerializer.Serialize(connections, ProtocolJsonContext.Default.ListConnectionInfo);
-        await File.WriteAllTextAsync(_filePath, json);
+        var tempPath = _filePath + ".tmp";
+        await File.WriteAllTextAsync(tempPath, json);
+        File.Move(tempPath, _filePath, overwrite: true);
     }
 }

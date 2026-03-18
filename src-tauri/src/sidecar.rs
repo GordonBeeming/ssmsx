@@ -7,6 +7,10 @@ use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use serde_json::Value;
 
+/// Timeout for sidecar requests in seconds.
+/// Kept at 30s to accommodate slow initial connections while still failing fast for hangs.
+const REQUEST_TIMEOUT_SECS: u64 = 30;
+
 #[derive(Clone)]
 pub struct SidecarManager {
     child: Arc<Mutex<Option<CommandChild>>>,
@@ -118,8 +122,13 @@ impl SidecarManager {
         let (tx, rx) = oneshot::channel();
 
         if !self.running.load(Ordering::SeqCst) {
-            return Err("Sidecar not running".to_string());
+            return Err(format!(
+                "Sidecar not running — cannot send request for method '{}'",
+                method
+            ));
         }
+
+        log::debug!("Sending request '{}' for method '{}'", id, method);
 
         // Insert into pending before write so the reader task can match the response
         {
@@ -134,24 +143,42 @@ impl SidecarManager {
                 if let Err(e) = child.write(request_line.as_bytes()) {
                     let mut pending = self.pending.lock().await;
                     pending.remove(&id);
-                    return Err(format!("Failed to write to sidecar: {}", e));
+                    return Err(format!(
+                        "Failed to write to sidecar for method '{}': {}",
+                        method, e
+                    ));
                 }
             } else {
                 let mut pending = self.pending.lock().await;
                 pending.remove(&id);
-                return Err("Sidecar not running".to_string());
+                return Err(format!(
+                    "Sidecar not running — cannot send request for method '{}'",
+                    method
+                ));
             }
         }
 
         // Wait for response with timeout
-        match tokio::time::timeout(std::time::Duration::from_secs(30), rx).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS), rx).await {
             Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err("Response channel closed".to_string()),
+            Ok(Err(_)) => Err(format!(
+                "Response channel closed for request '{}' (method: '{}')",
+                id, method
+            )),
             Err(_) => {
                 // Clean up pending request on timeout
                 let mut pending = self.pending.lock().await;
                 pending.remove(&id);
-                Err("Request timed out".to_string())
+                log::warn!(
+                    "Request '{}' for method '{}' timed out after {}s",
+                    id,
+                    method,
+                    REQUEST_TIMEOUT_SECS
+                );
+                Err(format!(
+                    "Request timed out after {}s for method '{}'",
+                    REQUEST_TIMEOUT_SECS, method
+                ))
             }
         }
     }

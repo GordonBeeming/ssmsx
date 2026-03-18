@@ -19,6 +19,21 @@ React (invoke) → Tauri Command (Rust) → stdio JSON → C# Sidecar → SQL Se
 
 See [README.md](../README.md) for the full architecture diagram and tech stack.
 
+## Architecture: Vertical Slice Architecture (VSA)
+
+The codebase follows **Vertical Slice Architecture** — code is organized by **feature** (connection, explorer, query) rather than by technical layer (components, stores, commands). Each feature contains everything it needs from UI to backend.
+
+### Why VSA
+
+- **Cohesion**: All code for a feature lives together, making it easy to understand and modify
+- **Reduced coupling**: Features are self-contained; changes to one feature rarely affect others
+- **Parallel development**: Teams/agents can work on different features simultaneously without conflicts
+- **Discoverability**: Need to change connection logic? Look in `features/connection/`, not across 5 different directories
+
+### Cross-cutting concerns
+
+Truly shared code (UI primitives, utility functions, infrastructure) lives in dedicated shared directories. A piece of code moves to `shared/` only when it's used by 2+ features — never preemptively.
+
 ## Solution Structure
 
 ```
@@ -28,28 +43,63 @@ ssmsx/
 │   ├── tauri.conf.json
 │   ├── src/
 │   │   ├── main.rs
-│   │   ├── commands/             # Tauri IPC commands
-│   │   └── sidecar.rs            # Sidecar lifecycle management
+│   │   ├── lib.rs                # App setup + command registration
+│   │   ├── sidecar.rs            # Sidecar lifecycle management (shared infra)
+│   │   └── commands/             # Tauri IPC commands (one file per feature)
+│   │       ├── connection.rs
+│   │       ├── explorer.rs
+│   │       └── ping.rs
 │   └── sidecars/                 # C# AOT binaries (build output)
 │
 ├── src/                          # React + TypeScript frontend
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── src/
-│       ├── commands/             # Tauri invoke wrappers
-│       ├── hooks/
-│       ├── stores/               # Zustand
-│       └── components/
+│   ├── features/                 # Feature slices (primary organization)
+│   │   ├── connection/           # Connection management
+│   │   │   ├── api/              # Tauri invoke wrappers
+│   │   │   ├── components/       # React components
+│   │   │   ├── store/            # Zustand store
+│   │   │   ├── types.ts          # Feature-specific types
+│   │   │   └── index.ts          # Public barrel export
+│   │   ├── explorer/             # Object Explorer
+│   │   │   ├── api/
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   ├── store/
+│   │   │   ├── types.ts
+│   │   │   └── index.ts
+│   │   └── query/                # Query Editor
+│   │       ├── api/
+│   │       ├── components/
+│   │       ├── store/
+│   │       ├── types.ts
+│   │       └── index.ts
+│   ├── shared/                   # Code used by 2+ features
+│   │   ├── components/           # UI primitives (ContextMenu, ConfirmDialog, ErrorBoundary)
+│   │   ├── hooks/
+│   │   ├── types/
+│   │   └── utils/                # Shared utilities (SQL quoting, etc.)
+│   ├── app/                      # App shell (layout, composition)
+│   │   └── App.tsx
+│   ├── main.tsx
+│   └── index.css
 │
 ├── sidecar/                      # C# Native AOT sidecar
-│   ├── Ssmsx.Sidecar.sln
+│   ├── Ssmsx.Sidecar.slnx
 │   ├── src/
 │   │   ├── Ssmsx.Sidecar/       # stdio JSON-RPC server entry point
-│   │   ├── Ssmsx.Core/          # Business logic
-│   │   └── Ssmsx.Protocol/      # Shared message types
+│   │   ├── Ssmsx.Core/          # Business logic (organized by feature)
+│   │   │   ├── Connections/      # Connection feature
+│   │   │   ├── Explorer/         # Explorer feature
+│   │   │   ├── Credentials/      # Shared infrastructure
+│   │   │   ├── Auth/             # Shared infrastructure
+│   │   │   └── Storage/          # Shared infrastructure
+│   │   └── Ssmsx.Protocol/      # Shared message/model types
+│   │       ├── Models/           # DTOs by feature
+│   │       └── Messages/         # Request/response params by feature
 │   └── tests/
 │
 ├── build/                        # Cross-platform build scripts
+├── .claude/
+│   └── CLAUDE.md                 # VSA guidelines and code quality standards
 └── docs/
     └── SPEC.md                   # This file
 ```
