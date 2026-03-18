@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Ssmsx.Core.Connections;
@@ -8,11 +9,43 @@ namespace Ssmsx.Core.Explorer;
 public partial class SchemaDiscoveryService
 {
     private readonly ConnectionManager _connectionManager;
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _connectionLocks = new();
     private const int CommandTimeout = 10;
 
     public SchemaDiscoveryService(ConnectionManager connectionManager)
     {
         _connectionManager = connectionManager;
+    }
+
+    private SemaphoreSlim GetConnectionLock(string connectionId)
+    {
+        return _connectionLocks.GetOrAdd(connectionId, _ => new SemaphoreSlim(1, 1));
+    }
+
+    private async Task<T> WithDatabaseAsync<T>(string connectionId, string database, Func<SqlConnection, Task<T>> action)
+    {
+        ValidateDatabaseName(database);
+        var semaphore = GetConnectionLock(connectionId);
+        await semaphore.WaitAsync();
+        try
+        {
+            var connection = _connectionManager.GetConnection(connectionId);
+            var originalDb = connection.Database;
+            try
+            {
+                connection.ChangeDatabase(database);
+                return await action(connection);
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(originalDb))
+                    connection.ChangeDatabase(originalDb);
+            }
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     [GeneratedRegex(@"^[a-zA-Z0-9_ .\-]+$")]
@@ -30,38 +63,43 @@ public partial class SchemaDiscoveryService
 
     public async Task<List<DatabaseInfo>> GetDatabasesAsync(string connectionId)
     {
-        var connection = _connectionManager.GetConnection(connectionId);
-        const string sql = """
-            SELECT name, state_desc, compatibility_level, collation_name, recovery_model_desc
-            FROM sys.databases
-            ORDER BY name
-            """;
-
-        await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
-        await using var reader = await cmd.ExecuteReaderAsync();
-        var results = new List<DatabaseInfo>();
-        while (await reader.ReadAsync())
-        {
-            results.Add(new DatabaseInfo
-            {
-                Name = reader.GetString(0),
-                State = reader.GetString(1),
-                CompatibilityLevel = reader.GetByte(2),
-                CollationName = reader.IsDBNull(3) ? null : reader.GetString(3),
-                RecoveryModel = reader.IsDBNull(4) ? null : reader.GetString(4)
-            });
-        }
-        return results;
-    }
-
-    public async Task<List<TableInfo>> GetTablesAsync(string connectionId, string database)
-    {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
+        var semaphore = GetConnectionLock(connectionId);
+        await semaphore.WaitAsync();
         try
         {
-            connection.ChangeDatabase(database);
+            var connection = _connectionManager.GetConnection(connectionId);
+            const string sql = """
+                SELECT name, state_desc, compatibility_level, collation_name, recovery_model_desc
+                FROM sys.databases
+                ORDER BY name
+                """;
+
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<DatabaseInfo>();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new DatabaseInfo
+                {
+                    Name = reader.GetString(0),
+                    State = reader.GetString(1),
+                    CompatibilityLevel = reader.GetByte(2),
+                    CollationName = reader.IsDBNull(3) ? null : reader.GetString(3),
+                    RecoveryModel = reader.IsDBNull(4) ? null : reader.GetString(4)
+                });
+            }
+            return results;
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    public Task<List<TableInfo>> GetTablesAsync(string connectionId, string database)
+    {
+        return WithDatabaseAsync(connectionId, database, async connection =>
+        {
             const string sql = """
                 SELECT s.name AS [schema], t.name,
                        ISNULL(SUM(p.rows), 0) AS row_count, t.create_date
@@ -86,22 +124,13 @@ public partial class SchemaDiscoveryService
                 });
             }
             return results;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
-    public async Task<List<ViewInfo>> GetViewsAsync(string connectionId, string database)
+    public Task<List<ViewInfo>> GetViewsAsync(string connectionId, string database)
     {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
-        try
+        return WithDatabaseAsync(connectionId, database, async connection =>
         {
-            connection.ChangeDatabase(database);
             const string sql = """
                 SELECT s.name AS [schema], v.name, v.create_date
                 FROM sys.views v
@@ -122,22 +151,13 @@ public partial class SchemaDiscoveryService
                 });
             }
             return results;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
-    public async Task<List<ColumnInfo>> GetColumnsAsync(string connectionId, string database, string schema, string objectName)
+    public Task<List<ColumnInfo>> GetColumnsAsync(string connectionId, string database, string schema, string objectName)
     {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
-        try
+        return WithDatabaseAsync(connectionId, database, async connection =>
         {
-            connection.ChangeDatabase(database);
             const string sql = """
                 SELECT c.name, t.name AS data_type, c.max_length, c.precision, c.scale,
                        c.is_nullable, dc.definition, c.is_identity, c.is_computed
@@ -168,23 +188,13 @@ public partial class SchemaDiscoveryService
                 });
             }
             return results;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
-    public async Task<List<KeyInfo>> GetKeysAsync(string connectionId, string database, string schema, string tableName)
+    public Task<List<KeyInfo>> GetKeysAsync(string connectionId, string database, string schema, string tableName)
     {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
-        try
+        return WithDatabaseAsync(connectionId, database, async connection =>
         {
-            connection.ChangeDatabase(database);
-
             var results = new List<KeyInfo>();
             var objectName = $"{schema}.{tableName}";
 
@@ -247,22 +257,13 @@ public partial class SchemaDiscoveryService
             }
 
             return results;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
-    public async Task<List<IndexInfo>> GetIndexesAsync(string connectionId, string database, string schema, string tableName)
+    public Task<List<IndexInfo>> GetIndexesAsync(string connectionId, string database, string schema, string tableName)
     {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
-        try
+        return WithDatabaseAsync(connectionId, database, async connection =>
         {
-            connection.ChangeDatabase(database);
             const string sql = """
                 SELECT i.name, i.type_desc, i.is_unique,
                        c.name AS col_name, ic.is_included_column
@@ -307,22 +308,13 @@ public partial class SchemaDiscoveryService
                 Columns = kvp.Value.KeyColumns,
                 IncludedColumns = kvp.Value.IncludedColumns.Count > 0 ? kvp.Value.IncludedColumns : null
             }).ToList();
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
-    public async Task<List<StoredProcedureInfo>> GetProceduresAsync(string connectionId, string database)
+    public Task<List<StoredProcedureInfo>> GetProceduresAsync(string connectionId, string database)
     {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
-        try
+        return WithDatabaseAsync(connectionId, database, async connection =>
         {
-            connection.ChangeDatabase(database);
             const string sql = """
                 SELECT s.name AS [schema], p.name, p.create_date, p.modify_date
                 FROM sys.procedures p
@@ -344,22 +336,13 @@ public partial class SchemaDiscoveryService
                 });
             }
             return results;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
-    public async Task<List<FunctionInfo>> GetFunctionsAsync(string connectionId, string database)
+    public Task<List<FunctionInfo>> GetFunctionsAsync(string connectionId, string database)
     {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
-        try
+        return WithDatabaseAsync(connectionId, database, async connection =>
         {
-            connection.ChangeDatabase(database);
             const string sql = """
                 SELECT s.name AS [schema], o.name,
                        CASE o.type
@@ -390,22 +373,13 @@ public partial class SchemaDiscoveryService
                 });
             }
             return results;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
-    public async Task<List<DatabaseUserInfo>> GetUsersAsync(string connectionId, string database)
+    public Task<List<DatabaseUserInfo>> GetUsersAsync(string connectionId, string database)
     {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
-        try
+        return WithDatabaseAsync(connectionId, database, async connection =>
         {
-            connection.ChangeDatabase(database);
             const string sql = """
                 SELECT dp.name, dp.type_desc, dp.default_schema_name,
                        sp.name AS login_name
@@ -430,23 +404,13 @@ public partial class SchemaDiscoveryService
                 });
             }
             return results;
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
-    public async Task<ObjectScriptResult> GetObjectDefinitionAsync(string connectionId, string database, string schema, string objectName, string objectType)
+    public Task<ObjectScriptResult> GetObjectDefinitionAsync(string connectionId, string database, string schema, string objectName, string objectType)
     {
-        ValidateDatabaseName(database);
-        var connection = _connectionManager.GetConnection(connectionId);
-        var originalDb = connection.Database;
-        try
+        return WithDatabaseAsync(connectionId, database, async connection =>
         {
-            connection.ChangeDatabase(database);
-
             if (objectType == "table")
             {
                 return await GetTableCreateScriptAsync(connection, schema, objectName);
@@ -461,12 +425,7 @@ public partial class SchemaDiscoveryService
             {
                 Definition = result as string
             };
-        }
-        finally
-        {
-            if (!string.IsNullOrEmpty(originalDb))
-                connection.ChangeDatabase(originalDb);
-        }
+        });
     }
 
     private static async Task<ObjectScriptResult> GetTableCreateScriptAsync(SqlConnection connection, string schema, string tableName)
@@ -480,10 +439,12 @@ public partial class SchemaDiscoveryService
             SELECT c.name, t.name AS type_name, c.max_length, c.precision, c.scale,
                    c.is_nullable, c.is_identity, dc.definition,
                    CASE WHEN t.name IN ('char','varchar','nchar','nvarchar','binary','varbinary') THEN 1 ELSE 0 END AS has_length,
-                   CASE WHEN t.name IN ('decimal','numeric') THEN 1 ELSE 0 END AS has_precision
+                   CASE WHEN t.name IN ('decimal','numeric') THEN 1 ELSE 0 END AS has_precision,
+                   c.is_computed, cc.definition AS computed_definition
             FROM sys.columns c
             JOIN sys.types t ON c.user_type_id = t.user_type_id
             LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+            LEFT JOIN sys.computed_columns cc ON c.object_id = cc.object_id AND c.column_id = cc.column_id
             WHERE c.object_id = OBJECT_ID(@objectName)
             ORDER BY c.column_id
             """;
@@ -505,6 +466,14 @@ public partial class SchemaDiscoveryService
                 var defaultVal = reader.IsDBNull(7) ? null : reader.GetString(7);
                 var hasLength = reader.GetInt32(8) == 1;
                 var hasPrecision = reader.GetInt32(9) == 1;
+                var isComputed = reader.GetBoolean(10);
+                var computedDefinition = reader.IsDBNull(11) ? null : reader.GetString(11);
+
+                if (isComputed && computedDefinition != null)
+                {
+                    columns.Add($"    {colName} AS ({computedDefinition})");
+                    continue;
+                }
 
                 var typeSpec = typeName;
                 if (hasLength)

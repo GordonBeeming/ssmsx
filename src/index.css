@@ -23,7 +23,7 @@ body {
   user-select: none;
 }
 
-input, textarea, pre, [contenteditable="true"] {
+input, textarea, pre, [contenteditable] {
   -webkit-user-select: text;
   user-select: text;
 }

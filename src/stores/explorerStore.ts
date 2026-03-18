@@ -117,9 +117,9 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     if (!node) return;
 
     if (node.expanded) {
-      // Collapse
+      // Collapse — also cancel loading state if in-flight
       set((s) => ({
-        nodes: { ...s.nodes, [nodeId]: { ...node, expanded: false } },
+        nodes: { ...s.nodes, [nodeId]: { ...s.nodes[nodeId], expanded: false, loading: false } },
       }));
       return;
     }

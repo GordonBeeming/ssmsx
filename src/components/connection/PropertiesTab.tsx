@@ -66,13 +66,20 @@ export function PropertiesTab() {
     value: (typeof form)[K]
   ) => {
     setFormDirty(true);
-    if (identityFields.has(key) && selectedConnection) {
-      setIsDirtyIdentity(true);
-    }
     setForm((prev) => {
       const next = { ...prev, [key]: value };
-      if (identityFields.has(key) && prev.credentialRef) {
-        next.credentialRef = undefined;
+      if (identityFields.has(key)) {
+        if (prev.credentialRef) {
+          next.credentialRef = undefined;
+        }
+        // Check if identity fields still differ from saved connection
+        if (selectedConnection) {
+          const isDiff =
+            next.serverName !== selectedConnection.serverName ||
+            next.username !== (selectedConnection.username || "") ||
+            next.authType !== selectedConnection.authType;
+          setIsDirtyIdentity(isDiff);
+        }
       }
       return next;
     });

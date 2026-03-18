@@ -99,12 +99,11 @@ export function ConnectionStringTab() {
       username: parsed.username,
       createdAt: selectedConnection?.createdAt || new Date().toISOString(),
     };
-    await saveConnection(info);
-
-    // Test connection before connecting
+    // Test connection before saving/connecting
     const result = await testConnection(info);
     if (!result.success) return;
 
+    await saveConnection(info);
     await connect(info.id);
   };
 
