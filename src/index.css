@@ -19,4 +19,16 @@ body {
   color: var(--color-text-primary);
   background-color: var(--color-bg-primary);
   margin: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input, textarea, pre, [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+::placeholder {
+  font-style: italic;
+  opacity: 0.5;
 }

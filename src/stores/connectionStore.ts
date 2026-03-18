@@ -8,46 +8,55 @@ import {
   connectionConnect,
   connectionDisconnect,
 } from "../commands/connection";
+import { useExplorerStore } from "./explorerStore";
 
 export type DialogTab = "properties" | "connectionString" | "custom";
 
 interface ConnectionState {
   connections: ConnectionInfo[];
   selectedConnection: ConnectionInfo | null;
-  activeConnectionId: string | null;
+  activeConnectionIds: string[];
   dialogOpen: boolean;
   dialogTab: DialogTab;
   loading: boolean;
   testResult: ConnectionTestResult | null;
   error: string | null;
   searchFilter: string;
+  selectionVersion: number;
+  formDirty: boolean;
 
   loadConnections: () => Promise<void>;
+  setFormDirty: (dirty: boolean) => void;
   selectConnection: (c: ConnectionInfo | null) => void;
   openDialog: () => void;
   closeDialog: () => void;
   setDialogTab: (tab: DialogTab) => void;
   setSearchFilter: (filter: string) => void;
-  saveConnection: (info: ConnectionInfo, password?: string) => Promise<void>;
+  saveConnection: (info: ConnectionInfo, password?: string, clearCredential?: boolean) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
   testConnection: (
     info: ConnectionInfo,
     password?: string
   ) => Promise<ConnectionTestResult>;
   connect: (id: string) => Promise<void>;
-  disconnect: () => Promise<void>;
+  disconnect: (id: string) => Promise<void>;
+  isConnected: (id: string) => boolean;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   connections: [],
   selectedConnection: null,
-  activeConnectionId: null,
+  activeConnectionIds: [],
   dialogOpen: false,
   dialogTab: "properties",
   loading: false,
   testResult: null,
   error: null,
   searchFilter: "",
+  selectionVersion: 0,
+  formDirty: false,
+
+  setFormDirty: (dirty) => set({ formDirty: dirty }),
 
   loadConnections: async () => {
     try {
@@ -58,7 +67,13 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     }
   },
 
-  selectConnection: (c) => set({ selectedConnection: c, testResult: null }),
+  selectConnection: (c) =>
+    set((state) => ({
+      selectedConnection: c,
+      testResult: null,
+      selectionVersion: state.selectionVersion + 1,
+      formDirty: false,
+    })),
 
   openDialog: () => {
     set({
@@ -81,10 +96,10 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   setDialogTab: (tab) => set({ dialogTab: tab }),
   setSearchFilter: (filter) => set({ searchFilter: filter }),
 
-  saveConnection: async (info, password) => {
+  saveConnection: async (info, password, clearCredential) => {
     set({ loading: true, error: null });
     try {
-      await connectionSave(info, password);
+      await connectionSave(info, password, clearCredential);
       await get().loadConnections();
     } catch (e) {
       set({ error: String(e) });
@@ -126,7 +141,16 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await connectionConnect(id);
-      set({ activeConnectionId: id, dialogOpen: false });
+      const connection = get().connections.find((c) => c.id === id);
+      set((state) => ({
+        activeConnectionIds: state.activeConnectionIds.includes(id)
+          ? state.activeConnectionIds
+          : [...state.activeConnectionIds, id],
+        dialogOpen: false,
+      }));
+      if (connection) {
+        useExplorerStore.getState().addServerNode(id, connection);
+      }
     } catch (e) {
       set({ error: String(e) });
     } finally {
@@ -134,14 +158,19 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     }
   },
 
-  disconnect: async () => {
-    const id = get().activeConnectionId;
-    if (!id) return;
+  disconnect: async (id) => {
     try {
       await connectionDisconnect(id);
-      set({ activeConnectionId: null });
+      set((state) => ({
+        activeConnectionIds: state.activeConnectionIds.filter(
+          (cid) => cid !== id
+        ),
+      }));
+      useExplorerStore.getState().removeServerNode(id);
     } catch (e) {
       set({ error: String(e) });
     }
   },
+
+  isConnected: (id) => get().activeConnectionIds.includes(id),
 }));

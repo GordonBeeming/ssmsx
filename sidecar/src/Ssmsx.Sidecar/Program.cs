@@ -5,6 +5,7 @@ using Ssmsx.Protocol.Models;
 using Ssmsx.Core.Storage;
 using Ssmsx.Core.Connections;
 using Ssmsx.Core.Credentials;
+using Ssmsx.Core.Explorer;
 
 // Disable stdout buffering for real-time communication
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -13,6 +14,7 @@ Console.OutputEncoding = System.Text.Encoding.UTF8;
 var connectionStore = new ConnectionStore();
 var credentialStore = CredentialStoreFactory.Create();
 var connectionManager = new ConnectionManager();
+var schemaDiscovery = new SchemaDiscoveryService(connectionManager);
 
 var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
 {
@@ -48,14 +50,29 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
             saved = args.Connection with { CredentialRef = credKey };
             await connectionStore.SaveAsync(saved);
         }
-        else
+        else if (args.ClearCredential)
         {
-            // If connection previously had a stored credential but password is now empty, clean up
-            if (!string.IsNullOrEmpty(args.Connection.CredentialRef))
+            // Explicitly clear stored credential
+            var existing = await connectionStore.GetAsync(args.Connection.Id);
+            if (existing?.CredentialRef != null)
             {
-                try { await credentialStore.DeleteAsync(args.Connection.CredentialRef); } catch { /* ignore */ }
+                try { await credentialStore.DeleteAsync(existing.CredentialRef); } catch { /* ignore */ }
             }
             saved = args.Connection with { CredentialRef = null };
+            await connectionStore.SaveAsync(saved);
+        }
+        else
+        {
+            // No new password and no clear request — preserve existing credential
+            var existing = await connectionStore.GetAsync(args.Connection.Id);
+            if (existing?.CredentialRef != null)
+            {
+                saved = args.Connection with { CredentialRef = existing.CredentialRef };
+            }
+            else
+            {
+                saved = args.Connection;
+            }
             await connectionStore.SaveAsync(saved);
         }
         return JsonSerializer.SerializeToElement(saved, ProtocolJsonContext.Default.ConnectionInfo);
@@ -104,6 +121,77 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         var args = Deserialize<ConnectionDisconnectParams>(p, ProtocolJsonContext.Default.ConnectionDisconnectParams);
         await connectionManager.DisconnectAsync(args.Id);
         return JsonSerializer.SerializeToElement(true, ProtocolJsonContext.Default.Boolean);
+    },
+
+    // Explorer methods
+    ["explorer.databases"] = async p =>
+    {
+        var args = Deserialize<ExplorerDatabasesParams>(p, ProtocolJsonContext.Default.ExplorerDatabasesParams);
+        var result = await schemaDiscovery.GetDatabasesAsync(args.ConnectionId);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListDatabaseInfo);
+    },
+
+    ["explorer.tables"] = async p =>
+    {
+        var args = Deserialize<ExplorerTablesParams>(p, ProtocolJsonContext.Default.ExplorerTablesParams);
+        var result = await schemaDiscovery.GetTablesAsync(args.ConnectionId, args.Database);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListTableInfo);
+    },
+
+    ["explorer.views"] = async p =>
+    {
+        var args = Deserialize<ExplorerViewsParams>(p, ProtocolJsonContext.Default.ExplorerViewsParams);
+        var result = await schemaDiscovery.GetViewsAsync(args.ConnectionId, args.Database);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListViewInfo);
+    },
+
+    ["explorer.columns"] = async p =>
+    {
+        var args = Deserialize<ExplorerColumnsParams>(p, ProtocolJsonContext.Default.ExplorerColumnsParams);
+        var result = await schemaDiscovery.GetColumnsAsync(args.ConnectionId, args.Database, args.Schema, args.ObjectName);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListColumnInfo);
+    },
+
+    ["explorer.keys"] = async p =>
+    {
+        var args = Deserialize<ExplorerKeysParams>(p, ProtocolJsonContext.Default.ExplorerKeysParams);
+        var result = await schemaDiscovery.GetKeysAsync(args.ConnectionId, args.Database, args.Schema, args.TableName);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListKeyInfo);
+    },
+
+    ["explorer.indexes"] = async p =>
+    {
+        var args = Deserialize<ExplorerIndexesParams>(p, ProtocolJsonContext.Default.ExplorerIndexesParams);
+        var result = await schemaDiscovery.GetIndexesAsync(args.ConnectionId, args.Database, args.Schema, args.TableName);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListIndexInfo);
+    },
+
+    ["explorer.procedures"] = async p =>
+    {
+        var args = Deserialize<ExplorerProceduresParams>(p, ProtocolJsonContext.Default.ExplorerProceduresParams);
+        var result = await schemaDiscovery.GetProceduresAsync(args.ConnectionId, args.Database);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListStoredProcedureInfo);
+    },
+
+    ["explorer.functions"] = async p =>
+    {
+        var args = Deserialize<ExplorerFunctionsParams>(p, ProtocolJsonContext.Default.ExplorerFunctionsParams);
+        var result = await schemaDiscovery.GetFunctionsAsync(args.ConnectionId, args.Database);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListFunctionInfo);
+    },
+
+    ["explorer.users"] = async p =>
+    {
+        var args = Deserialize<ExplorerUsersParams>(p, ProtocolJsonContext.Default.ExplorerUsersParams);
+        var result = await schemaDiscovery.GetUsersAsync(args.ConnectionId, args.Database);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ListDatabaseUserInfo);
+    },
+
+    ["explorer.objectDefinition"] = async p =>
+    {
+        var args = Deserialize<ExplorerObjectDefinitionParams>(p, ProtocolJsonContext.Default.ExplorerObjectDefinitionParams);
+        var result = await schemaDiscovery.GetObjectDefinitionAsync(args.ConnectionId, args.Database, args.Schema, args.ObjectName, args.ObjectType);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ObjectScriptResult);
     }
 };
 

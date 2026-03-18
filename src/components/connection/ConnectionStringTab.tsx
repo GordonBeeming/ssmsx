@@ -42,10 +42,12 @@ export function ConnectionStringTab() {
   const {
     selectedConnection,
     loading,
+    testResult,
     selectConnection,
     setDialogTab,
     connect,
     saveConnection,
+    testConnection,
   } = useConnectionStore();
 
   const [cs, setCs] = useState(selectedConnection?.connectionString || "");
@@ -97,49 +99,68 @@ export function ConnectionStringTab() {
       username: parsed.username,
       createdAt: selectedConnection?.createdAt || new Date().toISOString(),
     };
+    // Test connection before saving/connecting
+    const result = await testConnection(info);
+    if (!result.success) return;
+
     await saveConnection(info);
     await connect(info.id);
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <label className="mb-1 block text-xs text-text-secondary">
-          Connection String
-        </label>
-        <textarea
-          value={cs}
-          onChange={(e) => {
-            setCs(e.target.value);
-            setError(null);
-          }}
-          placeholder="Server=localhost;Database=mydb;User Id=sa;Password=...;Encrypt=Optional;TrustServerCertificate=True;"
-          rows={5}
-          className="w-full resize-y rounded border border-bg-tertiary bg-bg-input px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-secondary focus:border-accent-hover focus:outline-none"
-        />
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="mb-1 block text-xs text-text-secondary">
+              Connection String
+            </label>
+            <textarea
+              value={cs}
+              onChange={(e) => {
+                setCs(e.target.value);
+                setError(null);
+              }}
+              placeholder="Server=localhost;Database=mydb;User Id=sa;Password=...;Encrypt=Optional;TrustServerCertificate=True;"
+              rows={5}
+              className="w-full resize-y rounded border border-bg-tertiary bg-bg-input px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-secondary focus:border-accent-hover focus:outline-none"
+            />
+          </div>
+        </div>
       </div>
 
-      {error && (
-        <div className="rounded bg-error/10 px-3 py-2 text-sm text-error">
-          {error}
+      <div className="shrink-0 border-t border-bg-tertiary pt-3">
+        {(error || testResult) && (
+          <div
+            className={`mb-3 rounded px-3 py-2 text-sm ${
+              error || !testResult?.success
+                ? "bg-error/10 text-error"
+                : "bg-success/10 text-success"
+            }`}
+          >
+            {error
+              ? error
+              : testResult?.success
+                ? "Connection successful!"
+                : `Connection failed: ${testResult?.error}`}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={handleParse}
+            disabled={!cs.trim()}
+            className="rounded border border-bg-tertiary bg-bg-secondary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Parse to Properties
+          </button>
+          <button
+            onClick={handleConnect}
+            disabled={loading || !cs.trim()}
+            className="rounded bg-accent px-4 py-1.5 text-sm text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Connecting..." : "Connect"}
+          </button>
         </div>
-      )}
-
-      <div className="flex justify-end gap-2 pt-2">
-        <button
-          onClick={handleParse}
-          disabled={!cs.trim()}
-          className="rounded border border-bg-tertiary bg-bg-secondary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Parse to Properties
-        </button>
-        <button
-          onClick={handleConnect}
-          disabled={loading || !cs.trim()}
-          className="rounded bg-accent px-4 py-1.5 text-sm text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? "Connecting..." : "Connect"}
-        </button>
       </div>
     </div>
   );

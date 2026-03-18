@@ -76,7 +76,7 @@ export function ConnectionDialog() {
             </div>
 
             {/* Tab content */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex min-h-0 flex-1 flex-col p-4">
               {dialogTab === "properties" && <PropertiesTab />}
               {dialogTab === "connectionString" && <ConnectionStringTab />}
               {dialogTab === "custom" && <CustomTab />}
