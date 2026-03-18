@@ -20,6 +20,7 @@ export function PropertiesTab() {
   const {
     connections,
     selectedConnection,
+    selectionVersion,
     loading,
     testResult,
     saveConnection,
@@ -31,6 +32,7 @@ export function PropertiesTab() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberPassword, setRememberPassword] = useState(true);
+  const [isDirtyIdentity, setIsDirtyIdentity] = useState(false);
 
   const hasStoredPassword = !!form.credentialRef;
 
@@ -52,24 +54,40 @@ export function PropertiesTab() {
       setForm(DEFAULT_CONNECTION);
     }
     setPassword("");
-  }, [selectedConnection]);
+    setIsDirtyIdentity(false);
+  }, [selectedConnection, selectionVersion]);
+
+  // Fields that make this a new connection when changed
+  const identityFields = new Set(["serverName", "username", "authType"]);
 
   const update = <K extends keyof typeof form>(
     key: K,
     value: (typeof form)[K]
   ) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    if (identityFields.has(key) && selectedConnection) {
+      setIsDirtyIdentity(true);
+    }
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      if (identityFields.has(key) && prev.credentialRef) {
+        next.credentialRef = undefined;
+      }
+      return next;
+    });
   };
 
   const recentServers = [
     ...new Set(connections.map((c) => c.serverName)),
   ].slice(0, 10);
 
+  // When identity fields changed, treat as a new connection (new ID)
+  const isNewConnection = !selectedConnection || isDirtyIdentity;
+
   const buildConnectionInfo = (): ConnectionInfo => ({
     ...form,
-    id: selectedConnection?.id || crypto.randomUUID(),
-    createdAt: selectedConnection?.createdAt || new Date().toISOString(),
-    lastUsed: selectedConnection?.lastUsed,
+    id: isNewConnection ? crypto.randomUUID() : selectedConnection!.id,
+    createdAt: isNewConnection ? new Date().toISOString() : selectedConnection!.createdAt,
+    lastUsed: isNewConnection ? undefined : selectedConnection!.lastUsed,
   });
 
   const handleTest = async () => {

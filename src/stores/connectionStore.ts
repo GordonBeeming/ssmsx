@@ -22,6 +22,7 @@ interface ConnectionState {
   testResult: ConnectionTestResult | null;
   error: string | null;
   searchFilter: string;
+  selectionVersion: number;
 
   loadConnections: () => Promise<void>;
   selectConnection: (c: ConnectionInfo | null) => void;
@@ -50,6 +51,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   testResult: null,
   error: null,
   searchFilter: "",
+  selectionVersion: 0,
 
   loadConnections: async () => {
     try {
@@ -60,7 +62,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     }
   },
 
-  selectConnection: (c) => set({ selectedConnection: c, testResult: null }),
+  selectConnection: (c) =>
+    set((state) => ({
+      selectedConnection: c,
+      testResult: null,
+      selectionVersion: state.selectionVersion + 1,
+    })),
 
   openDialog: () => {
     set({
