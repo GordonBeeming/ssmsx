@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -21,48 +21,43 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  if (!open) return null;
 
-  useEffect(() => {
-    const el = dialogRef.current;
-    if (!el) return;
-    if (open && !el.open) {
-      el.showModal();
-    } else if (!open && el.open) {
-      el.close();
-    }
-  }, [open]);
-
-  return (
-    <dialog
-      ref={dialogRef}
-      onCancel={onCancel}
-      className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0 w-[380px] max-w-[90vw] rounded-lg border border-bg-tertiary bg-bg-primary p-0 text-text-primary shadow-xl backdrop:bg-black/50"
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50"
+      onClick={onCancel}
     >
-      <div className="flex flex-col gap-4 p-5">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <p className="text-sm text-text-secondary">{message}</p>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded border border-bg-tertiary bg-bg-secondary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary"
-          >
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className={`rounded px-4 py-1.5 text-sm text-accent-text ${
-              danger
-                ? "bg-error hover:bg-error/80"
-                : "bg-accent hover:bg-accent-hover"
-            }`}
-          >
-            {confirmLabel}
-          </button>
+      <div
+        className="w-[380px] max-w-[90vw] rounded-lg border border-bg-tertiary bg-bg-primary p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-col gap-4">
+          <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+          <p className="text-sm text-text-secondary">{message}</p>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded border border-bg-tertiary bg-bg-secondary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary"
+            >
+              {cancelLabel}
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className={`rounded px-4 py-1.5 text-sm text-accent-text ${
+                danger
+                  ? "bg-error hover:bg-error/80"
+                  : "bg-accent hover:bg-accent-hover"
+              }`}
+            >
+              {confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
-    </dialog>
+    </div>,
+    document.body
   );
 }
