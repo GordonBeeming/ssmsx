@@ -85,9 +85,9 @@ export function PropertiesTab() {
     const result = await testConnection(info, password || undefined);
     if (!result.success) return;
 
-    // Only save if there's something new to persist
+    // Save if it's a new connection, identity changed, or password updated
     const hasNewPassword = !!password;
-    const needsSave = !selectedConnection || hasNewPassword || !rememberPassword;
+    const needsSave = isNewConnection || hasNewPassword || !rememberPassword;
     if (needsSave) {
       const infoToSave = rememberPassword
         ? info
