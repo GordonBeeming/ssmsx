@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useExplorerStore } from "../../stores/explorerStore";
 import type { ExplorerNode } from "../../stores/explorerStore";
@@ -8,11 +8,11 @@ import { useExplorerContextMenu } from "./useExplorerContextMenu";
 import { ContextMenu } from "../ui/ContextMenu";
 
 export function ObjectExplorerTree() {
-  // Subscribe to nodes/rootNodeIds so component re-renders when tree state changes
-  const _nodes = useExplorerStore((s) => s.nodes);
-  const _rootNodeIds = useExplorerStore((s) => s.rootNodeIds);
-  void _nodes; void _rootNodeIds;
-  const visibleNodes = useExplorerStore((s) => s.getVisibleNodes());
+  // Subscribe to the state that getVisibleNodes depends on
+  const nodes = useExplorerStore((s) => s.nodes);
+  const rootNodeIds = useExplorerStore((s) => s.rootNodeIds);
+  const getVisibleNodes = useExplorerStore((s) => s.getVisibleNodes);
+  const visibleNodes = useMemo(() => getVisibleNodes(), [nodes, rootNodeIds, getVisibleNodes]);
   const parentRef = useRef<HTMLDivElement>(null);
   const handleKeyDown = useTreeKeyboard(visibleNodes);
   const getMenuItems = useExplorerContextMenu();

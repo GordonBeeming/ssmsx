@@ -18,7 +18,11 @@ function Root() {
     return () => document.removeEventListener("contextmenu", handler);
   }, []);
 
-  return <App />;
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
