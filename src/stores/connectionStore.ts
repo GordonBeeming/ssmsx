@@ -23,8 +23,10 @@ interface ConnectionState {
   error: string | null;
   searchFilter: string;
   selectionVersion: number;
+  formDirty: boolean;
 
   loadConnections: () => Promise<void>;
+  setFormDirty: (dirty: boolean) => void;
   selectConnection: (c: ConnectionInfo | null) => void;
   openDialog: () => void;
   closeDialog: () => void;
@@ -52,6 +54,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   error: null,
   searchFilter: "",
   selectionVersion: 0,
+  formDirty: false,
+
+  setFormDirty: (dirty) => set({ formDirty: dirty }),
 
   loadConnections: async () => {
     try {
@@ -67,6 +72,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       selectedConnection: c,
       testResult: null,
       selectionVersion: state.selectionVersion + 1,
+      formDirty: false,
     })),
 
   openDialog: () => {

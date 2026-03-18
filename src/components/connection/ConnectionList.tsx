@@ -3,6 +3,7 @@ import { useState, useCallback } from "react";
 import type { ConnectionInfo } from "../../commands/connection";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 
 const AUTH_TYPE_LABELS: Record<string, string> = {
   SqlAuth: "SQL",
@@ -15,16 +16,26 @@ export function ConnectionList() {
     connections,
     searchFilter,
     setSearchFilter,
+    selectedConnection,
     selectConnection,
     connect,
     deleteConnection,
     setDialogTab,
+    formDirty,
   } = useConnectionStore();
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
     connection: ConnectionInfo;
+  } | null>(null);
+
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => void;
   } | null>(null);
 
   const filtered = connections.filter((c) => {
@@ -37,13 +48,52 @@ export function ConnectionList() {
     );
   });
 
-  const handleClick = useCallback(
+  const switchToConnection = useCallback(
     (c: ConnectionInfo) => {
       selectConnection(c);
       setDialogTab("properties");
     },
     [selectConnection, setDialogTab]
   );
+
+  const handleClick = useCallback(
+    (c: ConnectionInfo) => {
+      if (formDirty && selectedConnection?.id !== c.id) {
+        setConfirmAction({
+          title: "Unsaved Changes",
+          message: "You have unsaved changes. Switch to this connection and discard them?",
+          confirmLabel: "Discard & Switch",
+          onConfirm: () => {
+            switchToConnection(c);
+            setConfirmAction(null);
+          },
+        });
+        return;
+      }
+      switchToConnection(c);
+    },
+    [formDirty, selectedConnection, switchToConnection]
+  );
+
+  const handleNewConnection = useCallback(() => {
+    const doNew = () => {
+      selectConnection(null);
+      setDialogTab("properties");
+    };
+    if (formDirty) {
+      setConfirmAction({
+        title: "Unsaved Changes",
+        message: "You have unsaved changes. Start a new connection and discard them?",
+        confirmLabel: "Discard & New",
+        onConfirm: () => {
+          doNew();
+          setConfirmAction(null);
+        },
+      });
+      return;
+    }
+    doNew();
+  }, [formDirty, selectConnection, setDialogTab]);
 
   const handleDoubleClick = useCallback(
     (c: ConnectionInfo) => {
@@ -60,6 +110,22 @@ export function ConnectionList() {
     []
   );
 
+  const handleDelete = useCallback(
+    (c: ConnectionInfo) => {
+      setConfirmAction({
+        title: "Delete Connection",
+        message: `Delete connection "${c.name || c.serverName}"? This cannot be undone.`,
+        confirmLabel: "Delete",
+        danger: true,
+        onConfirm: () => {
+          deleteConnection(c.id);
+          setConfirmAction(null);
+        },
+      });
+    },
+    [deleteConnection]
+  );
+
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? [
         {
@@ -69,14 +135,13 @@ export function ConnectionList() {
         {
           label: "Edit",
           onClick: () => {
-            selectConnection(contextMenu.connection);
-            setDialogTab("properties");
+            switchToConnection(contextMenu.connection);
           },
         },
         {
           label: "Delete",
           danger: true,
-          onClick: () => deleteConnection(contextMenu.connection.id),
+          onClick: () => handleDelete(contextMenu.connection),
         },
       ]
     : [];
@@ -91,6 +156,14 @@ export function ConnectionList() {
         className="w-full rounded border border-bg-tertiary bg-bg-input px-3 py-1.5 text-sm text-text-primary placeholder:text-text-secondary focus:border-accent-hover focus:outline-none"
       />
 
+      <button
+        type="button"
+        onClick={handleNewConnection}
+        className="w-full rounded border border-dashed border-bg-tertiary px-3 py-1.5 text-xs text-text-secondary hover:border-accent-hover hover:text-text-primary"
+      >
+        + New Connection
+      </button>
+
       <div className="max-h-[300px] overflow-y-auto">
         {filtered.length === 0 ? (
           <p className="py-4 text-center text-sm text-text-secondary">
@@ -102,7 +175,9 @@ export function ConnectionList() {
           filtered.map((c) => (
             <div
               key={c.id}
-              className="flex cursor-pointer items-center gap-2 rounded px-3 py-2 hover:bg-bg-tertiary"
+              className={`group flex cursor-pointer items-center gap-2 rounded px-3 py-2 hover:bg-bg-tertiary ${
+                selectedConnection?.id === c.id ? "bg-bg-tertiary" : ""
+              }`}
               onClick={() => handleClick(c)}
               onDoubleClick={() => handleDoubleClick(c)}
               onContextMenu={(e) => handleContextMenu(e, c)}
@@ -124,6 +199,20 @@ export function ConnectionList() {
               <span className="shrink-0 rounded bg-bg-tertiary px-1.5 py-0.5 text-xs text-text-secondary">
                 {AUTH_TYPE_LABELS[c.authType] || c.authType}
               </span>
+              <button
+                type="button"
+                title="Delete connection"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(c);
+                }}
+                className="shrink-0 rounded p-0.5 text-text-secondary opacity-0 hover:text-error group-hover:opacity-100"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <line x1="4" y1="4" x2="12" y2="12" />
+                  <line x1="12" y1="4" x2="4" y2="12" />
+                </svg>
+              </button>
             </div>
           ))
         )}
@@ -137,6 +226,16 @@ export function ConnectionList() {
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={confirmAction?.title ?? ""}
+        message={confirmAction?.message ?? ""}
+        confirmLabel={confirmAction?.confirmLabel ?? "Continue"}
+        danger={confirmAction?.danger}
+        onConfirm={() => confirmAction?.onConfirm()}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 }

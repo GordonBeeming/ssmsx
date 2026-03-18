@@ -26,6 +26,7 @@ export function PropertiesTab() {
     saveConnection,
     testConnection,
     connect,
+    setFormDirty,
   } = useConnectionStore();
 
   const [form, setForm] = useState(DEFAULT_CONNECTION);
@@ -64,6 +65,7 @@ export function PropertiesTab() {
     key: K,
     value: (typeof form)[K]
   ) => {
+    setFormDirty(true);
     if (identityFields.has(key) && selectedConnection) {
       setIsDirtyIdentity(true);
     }
