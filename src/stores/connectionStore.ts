@@ -8,13 +8,14 @@ import {
   connectionConnect,
   connectionDisconnect,
 } from "../commands/connection";
+import { useExplorerStore } from "./explorerStore";
 
 export type DialogTab = "properties" | "connectionString" | "custom";
 
 interface ConnectionState {
   connections: ConnectionInfo[];
   selectedConnection: ConnectionInfo | null;
-  activeConnectionId: string | null;
+  activeConnectionIds: string[];
   dialogOpen: boolean;
   dialogTab: DialogTab;
   loading: boolean;
@@ -35,13 +36,14 @@ interface ConnectionState {
     password?: string
   ) => Promise<ConnectionTestResult>;
   connect: (id: string) => Promise<void>;
-  disconnect: () => Promise<void>;
+  disconnect: (id: string) => Promise<void>;
+  isConnected: (id: string) => boolean;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   connections: [],
   selectedConnection: null,
-  activeConnectionId: null,
+  activeConnectionIds: [],
   dialogOpen: false,
   dialogTab: "properties",
   loading: false,
@@ -126,7 +128,16 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       await connectionConnect(id);
-      set({ activeConnectionId: id, dialogOpen: false });
+      const connection = get().connections.find((c) => c.id === id);
+      set((state) => ({
+        activeConnectionIds: state.activeConnectionIds.includes(id)
+          ? state.activeConnectionIds
+          : [...state.activeConnectionIds, id],
+        dialogOpen: false,
+      }));
+      if (connection) {
+        useExplorerStore.getState().addServerNode(id, connection);
+      }
     } catch (e) {
       set({ error: String(e) });
     } finally {
@@ -134,14 +145,19 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     }
   },
 
-  disconnect: async () => {
-    const id = get().activeConnectionId;
-    if (!id) return;
+  disconnect: async (id) => {
     try {
       await connectionDisconnect(id);
-      set({ activeConnectionId: null });
+      set((state) => ({
+        activeConnectionIds: state.activeConnectionIds.filter(
+          (cid) => cid !== id
+        ),
+      }));
+      useExplorerStore.getState().removeServerNode(id);
     } catch (e) {
       set({ error: String(e) });
     }
   },
+
+  isConnected: (id) => get().activeConnectionIds.includes(id),
 }));

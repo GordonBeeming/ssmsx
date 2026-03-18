@@ -4,6 +4,8 @@ export interface ContextMenuItem {
   label: string;
   onClick: () => void;
   danger?: boolean;
+  separator?: boolean;
+  disabled?: boolean;
 }
 
 interface ContextMenuProps {
@@ -32,21 +34,35 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       className="fixed z-50 min-w-[140px] rounded border border-bg-tertiary bg-bg-secondary shadow-lg"
       style={{ left: x, top: y }}
     >
-      {items.map((item) => (
-        <button
-          type="button"
-          key={item.label}
-          className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary ${
-            item.danger ? "text-error" : "text-text-primary"
-          }`}
-          onClick={() => {
-            item.onClick();
-            onClose();
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
+      {items.map((item, i) =>
+        item.separator ? (
+          <div
+            key={`sep-${i}`}
+            className="mx-2 my-1 border-t border-bg-tertiary"
+          />
+        ) : (
+          <button
+            type="button"
+            key={item.label}
+            disabled={item.disabled}
+            className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary ${
+              item.danger
+                ? "text-error"
+                : item.disabled
+                  ? "cursor-not-allowed text-text-secondary opacity-50"
+                  : "text-text-primary"
+            }`}
+            onClick={() => {
+              if (!item.disabled) {
+                item.onClick();
+                onClose();
+              }
+            }}
+          >
+            {item.label}
+          </button>
+        )
+      )}
     </div>
   );
 }

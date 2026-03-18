@@ -32,6 +32,16 @@ pub fn run() {
             commands::connection::connection_test,
             commands::connection::connection_connect,
             commands::connection::connection_disconnect,
+            commands::explorer::explorer_databases,
+            commands::explorer::explorer_tables,
+            commands::explorer::explorer_views,
+            commands::explorer::explorer_columns,
+            commands::explorer::explorer_keys,
+            commands::explorer::explorer_indexes,
+            commands::explorer::explorer_procedures,
+            commands::explorer::explorer_functions,
+            commands::explorer::explorer_users,
+            commands::explorer::explorer_object_definition,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

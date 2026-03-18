@@ -32,6 +32,8 @@ export function PropertiesTab() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberPassword, setRememberPassword] = useState(true);
 
+  const hasStoredPassword = !!form.credentialRef;
+
   useEffect(() => {
     if (selectedConnection) {
       setForm({
@@ -78,10 +80,24 @@ export function PropertiesTab() {
   const handleConnect = async () => {
     if (!form.serverName) return;
     const info = buildConnectionInfo();
-    const infoToSave = rememberPassword
-      ? info
-      : { ...info, credentialRef: undefined };
-    await saveConnection(infoToSave, rememberPassword ? password || undefined : undefined);
+
+    // Test connection before saving/connecting
+    const result = await testConnection(info, password || undefined);
+    if (!result.success) return;
+
+    // Only save if there's something new to persist
+    const hasNewPassword = !!password;
+    const needsSave = !selectedConnection || hasNewPassword || !rememberPassword;
+    if (needsSave) {
+      const infoToSave = rememberPassword
+        ? info
+        : { ...info, credentialRef: undefined };
+      await saveConnection(
+        infoToSave,
+        rememberPassword && hasNewPassword ? password : undefined
+      );
+    }
+
     await connect(info.id);
   };
 
@@ -90,6 +106,8 @@ export function PropertiesTab() {
   const needsPassword = form.authType === "SqlAuth";
 
   return (
+    <div className="flex h-full flex-col">
+    <div className="flex-1 overflow-y-auto">
     <div className="flex flex-col gap-3">
       {/* Server Name */}
       <div>
@@ -156,7 +174,8 @@ export function PropertiesTab() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-bg-tertiary bg-bg-input px-3 py-1.5 pr-16 text-sm text-text-primary focus:border-accent-hover focus:outline-none"
+              placeholder={hasStoredPassword ? "••••••••  (saved)" : ""}
+              className="w-full rounded border border-bg-tertiary bg-bg-input px-3 py-1.5 pr-16 text-sm text-text-primary placeholder:text-text-secondary focus:border-accent-hover focus:outline-none"
             />
             <button
               type="button"
@@ -222,38 +241,40 @@ export function PropertiesTab() {
           </label>
         </div>
       </div>
+    </div>
+    </div>
 
-      {/* Test Result */}
-      {testResult && (
-        <div
-          className={`rounded px-3 py-2 text-sm ${
-            testResult.success
-              ? "bg-success/10 text-success"
-              : "bg-error/10 text-error"
-          }`}
-        >
-          {testResult.success
-            ? "Connection successful!"
-            : `Connection failed: ${testResult.error}`}
+      {/* Test result + Buttons — fixed at bottom */}
+      <div className="shrink-0 border-t border-bg-tertiary pt-3">
+        {testResult && (
+          <div
+            className={`mb-3 rounded px-3 py-2 text-sm ${
+              testResult.success
+                ? "bg-success/10 text-success"
+                : "bg-error/10 text-error"
+            }`}
+          >
+            {testResult.success
+              ? "Connection successful!"
+              : `Connection failed: ${testResult.error}`}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={handleTest}
+            disabled={loading || !form.serverName}
+            className="rounded border border-bg-tertiary bg-bg-secondary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Testing..." : "Test Connection"}
+          </button>
+          <button
+            onClick={handleConnect}
+            disabled={loading || !form.serverName}
+            className="rounded bg-accent px-4 py-1.5 text-sm text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Connecting..." : "Connect"}
+          </button>
         </div>
-      )}
-
-      {/* Buttons */}
-      <div className="flex justify-end gap-2 pt-2">
-        <button
-          onClick={handleTest}
-          disabled={loading || !form.serverName}
-          className="rounded border border-bg-tertiary bg-bg-secondary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? "Testing..." : "Test Connection"}
-        </button>
-        <button
-          onClick={handleConnect}
-          disabled={loading || !form.serverName}
-          className="rounded bg-accent px-4 py-1.5 text-sm text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? "Connecting..." : "Connect"}
-        </button>
       </div>
     </div>
   );

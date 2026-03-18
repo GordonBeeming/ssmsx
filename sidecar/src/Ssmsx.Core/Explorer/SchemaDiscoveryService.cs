@@ -1,0 +1,527 @@
+using System.Text.RegularExpressions;
+using Microsoft.Data.SqlClient;
+using Ssmsx.Core.Connections;
+using Ssmsx.Protocol.Models;
+
+namespace Ssmsx.Core.Explorer;
+
+public partial class SchemaDiscoveryService
+{
+    private readonly ConnectionManager _connectionManager;
+    private const int CommandTimeout = 10;
+
+    public SchemaDiscoveryService(ConnectionManager connectionManager)
+    {
+        _connectionManager = connectionManager;
+    }
+
+    [GeneratedRegex(@"^[a-zA-Z0-9_ .\-]+$")]
+    private static partial Regex SafeNameRegex();
+
+    internal static void ValidateDatabaseName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Database name cannot be empty");
+        if (!SafeNameRegex().IsMatch(name))
+            throw new ArgumentException($"Invalid database name: {name}");
+    }
+
+    private static string QuoteName(string name) => $"[{name.Replace("]", "]]")}]";
+
+    public async Task<List<DatabaseInfo>> GetDatabasesAsync(string connectionId)
+    {
+        var connection = _connectionManager.GetConnection(connectionId);
+        const string sql = """
+            SELECT name, state_desc, compatibility_level, collation_name, recovery_model_desc
+            FROM sys.databases
+            ORDER BY name
+            """;
+
+        await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+        await using var reader = await cmd.ExecuteReaderAsync();
+        var results = new List<DatabaseInfo>();
+        while (await reader.ReadAsync())
+        {
+            results.Add(new DatabaseInfo
+            {
+                Name = reader.GetString(0),
+                State = reader.GetString(1),
+                CompatibilityLevel = reader.GetByte(2),
+                CollationName = reader.IsDBNull(3) ? null : reader.GetString(3),
+                RecoveryModel = reader.IsDBNull(4) ? null : reader.GetString(4)
+            });
+        }
+        return results;
+    }
+
+    public async Task<List<TableInfo>> GetTablesAsync(string connectionId, string database)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+            const string sql = """
+                SELECT s.name AS [schema], t.name,
+                       ISNULL(SUM(p.rows), 0) AS row_count, t.create_date
+                FROM sys.tables t
+                JOIN sys.schemas s ON t.schema_id = s.schema_id
+                LEFT JOIN sys.partitions p ON t.object_id = p.object_id AND p.index_id IN (0, 1)
+                GROUP BY s.name, t.name, t.create_date
+                ORDER BY s.name, t.name
+                """;
+
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<TableInfo>();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new TableInfo
+                {
+                    Schema = reader.GetString(0),
+                    Name = reader.GetString(1),
+                    RowCount = reader.GetInt64(2),
+                    CreateDate = reader.GetDateTime(3)
+                });
+            }
+            return results;
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    public async Task<List<ViewInfo>> GetViewsAsync(string connectionId, string database)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+            const string sql = """
+                SELECT s.name AS [schema], v.name, v.create_date
+                FROM sys.views v
+                JOIN sys.schemas s ON v.schema_id = s.schema_id
+                ORDER BY s.name, v.name
+                """;
+
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<ViewInfo>();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new ViewInfo
+                {
+                    Schema = reader.GetString(0),
+                    Name = reader.GetString(1),
+                    CreateDate = reader.GetDateTime(2)
+                });
+            }
+            return results;
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    public async Task<List<ColumnInfo>> GetColumnsAsync(string connectionId, string database, string schema, string objectName)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+            const string sql = """
+                SELECT c.name, t.name AS data_type, c.max_length, c.precision, c.scale,
+                       c.is_nullable, dc.definition, c.is_identity, c.is_computed
+                FROM sys.columns c
+                JOIN sys.types t ON c.user_type_id = t.user_type_id
+                LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+                WHERE c.object_id = OBJECT_ID(@objectName)
+                ORDER BY c.column_id
+                """;
+
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            cmd.Parameters.AddWithValue("@objectName", $"{schema}.{objectName}");
+            await using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<ColumnInfo>();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new ColumnInfo
+                {
+                    Name = reader.GetString(0),
+                    DataType = reader.GetString(1),
+                    MaxLength = reader.GetInt16(2),
+                    Precision = reader.GetByte(3),
+                    Scale = reader.GetByte(4),
+                    IsNullable = reader.GetBoolean(5),
+                    DefaultValue = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    IsIdentity = reader.GetBoolean(7),
+                    IsComputed = reader.GetBoolean(8)
+                });
+            }
+            return results;
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    public async Task<List<KeyInfo>> GetKeysAsync(string connectionId, string database, string schema, string tableName)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+
+            var results = new List<KeyInfo>();
+            var objectName = $"{schema}.{tableName}";
+
+            // Primary keys and unique constraints
+            const string keySql = """
+                SELECT kc.name, kc.type_desc,
+                       STRING_AGG(c.name, ', ') WITHIN GROUP (ORDER BY ic.key_ordinal)
+                FROM sys.key_constraints kc
+                JOIN sys.index_columns ic ON kc.parent_object_id = ic.object_id AND kc.unique_index_id = ic.index_id
+                JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+                WHERE kc.parent_object_id = OBJECT_ID(@objectName)
+                GROUP BY kc.name, kc.type_desc
+                """;
+
+            await using (var cmd = new SqlCommand(keySql, connection) { CommandTimeout = CommandTimeout })
+            {
+                cmd.Parameters.AddWithValue("@objectName", objectName);
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    results.Add(new KeyInfo
+                    {
+                        Name = reader.GetString(0),
+                        Type = reader.GetString(1),
+                        Columns = reader.GetString(2).Split(", ").ToList()
+                    });
+                }
+            }
+
+            // Foreign keys
+            const string fkSql = """
+                SELECT fk.name,
+                       STRING_AGG(cp.name, ', ') WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS columns,
+                       SCHEMA_NAME(rt.schema_id) + '.' + rt.name AS referenced_table,
+                       STRING_AGG(cr.name, ', ') WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS referenced_columns
+                FROM sys.foreign_keys fk
+                JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+                JOIN sys.columns cp ON fkc.parent_object_id = cp.object_id AND fkc.parent_column_id = cp.column_id
+                JOIN sys.columns cr ON fkc.referenced_object_id = cr.object_id AND fkc.referenced_column_id = cr.column_id
+                JOIN sys.tables rt ON fkc.referenced_object_id = rt.object_id
+                WHERE fk.parent_object_id = OBJECT_ID(@objectName)
+                GROUP BY fk.name, rt.schema_id, rt.name
+                """;
+
+            await using (var cmd = new SqlCommand(fkSql, connection) { CommandTimeout = CommandTimeout })
+            {
+                cmd.Parameters.AddWithValue("@objectName", objectName);
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    results.Add(new KeyInfo
+                    {
+                        Name = reader.GetString(0),
+                        Type = "FOREIGN_KEY_CONSTRAINT",
+                        Columns = reader.GetString(1).Split(", ").ToList(),
+                        ReferencedTable = reader.GetString(2),
+                        ReferencedColumns = reader.GetString(3).Split(", ").ToList()
+                    });
+                }
+            }
+
+            return results;
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    public async Task<List<IndexInfo>> GetIndexesAsync(string connectionId, string database, string schema, string tableName)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+            const string sql = """
+                SELECT i.name, i.type_desc, i.is_unique,
+                       c.name AS col_name, ic.is_included_column
+                FROM sys.indexes i
+                JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+                WHERE i.object_id = OBJECT_ID(@objectName)
+                  AND i.name IS NOT NULL
+                  AND i.type > 0
+                ORDER BY i.name, ic.is_included_column, ic.key_ordinal
+                """;
+
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            cmd.Parameters.AddWithValue("@objectName", $"{schema}.{tableName}");
+            await using var reader = await cmd.ExecuteReaderAsync();
+
+            // Collect raw rows, then aggregate in C#
+            var indexData = new Dictionary<string, (string Type, bool IsUnique, List<string> KeyColumns, List<string> IncludedColumns)>();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(0);
+                var type = reader.GetString(1);
+                var isUnique = reader.GetBoolean(2);
+                var colName = reader.GetString(3);
+                var isIncluded = reader.GetBoolean(4);
+
+                if (!indexData.ContainsKey(name))
+                    indexData[name] = (type, isUnique, new List<string>(), new List<string>());
+
+                var entry = indexData[name];
+                if (isIncluded)
+                    entry.IncludedColumns.Add(colName);
+                else
+                    entry.KeyColumns.Add(colName);
+            }
+
+            return indexData.Select(kvp => new IndexInfo
+            {
+                Name = kvp.Key,
+                Type = kvp.Value.Type,
+                IsUnique = kvp.Value.IsUnique,
+                Columns = kvp.Value.KeyColumns,
+                IncludedColumns = kvp.Value.IncludedColumns.Count > 0 ? kvp.Value.IncludedColumns : null
+            }).ToList();
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    public async Task<List<StoredProcedureInfo>> GetProceduresAsync(string connectionId, string database)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+            const string sql = """
+                SELECT s.name AS [schema], p.name, p.create_date, p.modify_date
+                FROM sys.procedures p
+                JOIN sys.schemas s ON p.schema_id = s.schema_id
+                ORDER BY s.name, p.name
+                """;
+
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<StoredProcedureInfo>();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new StoredProcedureInfo
+                {
+                    Schema = reader.GetString(0),
+                    Name = reader.GetString(1),
+                    CreateDate = reader.GetDateTime(2),
+                    ModifyDate = reader.GetDateTime(3)
+                });
+            }
+            return results;
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    public async Task<List<FunctionInfo>> GetFunctionsAsync(string connectionId, string database)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+            const string sql = """
+                SELECT s.name AS [schema], o.name,
+                       CASE o.type
+                           WHEN 'FN' THEN 'Scalar'
+                           WHEN 'IF' THEN 'Inline Table'
+                           WHEN 'TF' THEN 'Table'
+                           ELSE o.type
+                       END AS function_type,
+                       o.create_date, o.modify_date
+                FROM sys.objects o
+                JOIN sys.schemas s ON o.schema_id = s.schema_id
+                WHERE o.type IN ('FN', 'IF', 'TF')
+                ORDER BY s.name, o.name
+                """;
+
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<FunctionInfo>();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new FunctionInfo
+                {
+                    Schema = reader.GetString(0),
+                    Name = reader.GetString(1),
+                    Type = reader.GetString(2),
+                    CreateDate = reader.GetDateTime(3),
+                    ModifyDate = reader.GetDateTime(4)
+                });
+            }
+            return results;
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    public async Task<List<DatabaseUserInfo>> GetUsersAsync(string connectionId, string database)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+            const string sql = """
+                SELECT dp.name, dp.type_desc, dp.default_schema_name,
+                       sp.name AS login_name
+                FROM sys.database_principals dp
+                LEFT JOIN sys.server_principals sp ON dp.sid = sp.sid
+                WHERE dp.type IN ('S', 'U', 'G')
+                  AND dp.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest', 'public')
+                ORDER BY dp.name
+                """;
+
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var reader = await cmd.ExecuteReaderAsync();
+            var results = new List<DatabaseUserInfo>();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new DatabaseUserInfo
+                {
+                    Name = reader.GetString(0),
+                    Type = reader.GetString(1),
+                    DefaultSchema = reader.IsDBNull(2) ? null : reader.GetString(2),
+                    LoginName = reader.IsDBNull(3) ? null : reader.GetString(3)
+                });
+            }
+            return results;
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    public async Task<ObjectScriptResult> GetObjectDefinitionAsync(string connectionId, string database, string schema, string objectName, string objectType)
+    {
+        ValidateDatabaseName(database);
+        var connection = _connectionManager.GetConnection(connectionId);
+        var originalDb = connection.Database;
+        try
+        {
+            connection.ChangeDatabase(database);
+
+            if (objectType == "table")
+            {
+                return await GetTableCreateScriptAsync(connection, schema, objectName);
+            }
+
+            // For views, procedures, functions — use OBJECT_DEFINITION
+            const string sql = "SELECT OBJECT_DEFINITION(OBJECT_ID(@objectName))";
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            cmd.Parameters.AddWithValue("@objectName", $"{schema}.{objectName}");
+            var result = await cmd.ExecuteScalarAsync();
+            return new ObjectScriptResult
+            {
+                Definition = result as string
+            };
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(originalDb))
+                connection.ChangeDatabase(originalDb);
+        }
+    }
+
+    private static async Task<ObjectScriptResult> GetTableCreateScriptAsync(SqlConnection connection, string schema, string tableName)
+    {
+        // Build CREATE TABLE from metadata
+        var quotedSchema = QuoteName(schema);
+        var quotedTable = QuoteName(tableName);
+        var objectName = $"{schema}.{tableName}";
+
+        const string colSql = """
+            SELECT c.name, t.name AS type_name, c.max_length, c.precision, c.scale,
+                   c.is_nullable, c.is_identity, dc.definition,
+                   CASE WHEN t.name IN ('char','varchar','nchar','nvarchar','binary','varbinary') THEN 1 ELSE 0 END AS has_length,
+                   CASE WHEN t.name IN ('decimal','numeric') THEN 1 ELSE 0 END AS has_precision
+            FROM sys.columns c
+            JOIN sys.types t ON c.user_type_id = t.user_type_id
+            LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+            WHERE c.object_id = OBJECT_ID(@objectName)
+            ORDER BY c.column_id
+            """;
+
+        var columns = new List<string>();
+        await using (var cmd = new SqlCommand(colSql, connection) { CommandTimeout = CommandTimeout })
+        {
+            cmd.Parameters.AddWithValue("@objectName", objectName);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var colName = QuoteName(reader.GetString(0));
+                var typeName = reader.GetString(1);
+                var maxLen = reader.GetInt16(2);
+                var precision = reader.GetByte(3);
+                var scale = reader.GetByte(4);
+                var nullable = reader.GetBoolean(5);
+                var identity = reader.GetBoolean(6);
+                var defaultVal = reader.IsDBNull(7) ? null : reader.GetString(7);
+                var hasLength = reader.GetInt32(8) == 1;
+                var hasPrecision = reader.GetInt32(9) == 1;
+
+                var typeSpec = typeName;
+                if (hasLength)
+                    typeSpec += maxLen == -1 ? "(MAX)" : $"({maxLen})";
+                else if (hasPrecision)
+                    typeSpec += $"({precision}, {scale})";
+
+                var parts = $"    {colName} {typeSpec}";
+                if (identity) parts += " IDENTITY(1,1)";
+                if (!nullable) parts += " NOT NULL";
+                else parts += " NULL";
+                if (defaultVal != null) parts += $" DEFAULT {defaultVal}";
+                columns.Add(parts);
+            }
+        }
+
+        var script = $"CREATE TABLE {quotedSchema}.{quotedTable}\n(\n{string.Join(",\n", columns)}\n)";
+        return new ObjectScriptResult { Definition = script };
+    }
+}
