@@ -58,11 +58,11 @@ export function ConnectionList() {
 
   const handleClick = useCallback(
     (c: ConnectionInfo) => {
-      if (formDirty && selectedConnection?.id !== c.id) {
+      if (formDirty) {
         setConfirmAction({
           title: "Unsaved Changes",
-          message: "You have unsaved changes. Switch to this connection and discard them?",
-          confirmLabel: "Discard & Switch",
+          message: "You have unsaved changes. Load this connection and discard them?",
+          confirmLabel: "Discard & Load",
           onConfirm: () => {
             switchToConnection(c);
             setConfirmAction(null);
