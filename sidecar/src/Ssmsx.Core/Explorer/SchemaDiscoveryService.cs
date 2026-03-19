@@ -10,7 +10,12 @@ public partial class SchemaDiscoveryService
 {
     private readonly ConnectionManager _connectionManager;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _connectionLocks = new();
-    private const int CommandTimeout = 10;
+
+    /// <summary>
+    /// Default command timeout in seconds for SQL queries against the Object Explorer.
+    /// Kept low to avoid blocking the UI for unresponsive databases.
+    /// </summary>
+    private const int DefaultCommandTimeoutSeconds = 10;
 
     public SchemaDiscoveryService(ConnectionManager connectionManager)
     {
@@ -74,7 +79,7 @@ public partial class SchemaDiscoveryService
                 ORDER BY name
                 """;
 
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             await using var reader = await cmd.ExecuteReaderAsync();
             var results = new List<DatabaseInfo>();
             while (await reader.ReadAsync())
@@ -110,7 +115,7 @@ public partial class SchemaDiscoveryService
                 ORDER BY s.name, t.name
                 """;
 
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             await using var reader = await cmd.ExecuteReaderAsync();
             var results = new List<TableInfo>();
             while (await reader.ReadAsync())
@@ -138,7 +143,7 @@ public partial class SchemaDiscoveryService
                 ORDER BY s.name, v.name
                 """;
 
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             await using var reader = await cmd.ExecuteReaderAsync();
             var results = new List<ViewInfo>();
             while (await reader.ReadAsync())
@@ -168,7 +173,7 @@ public partial class SchemaDiscoveryService
                 ORDER BY c.column_id
                 """;
 
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             cmd.Parameters.AddWithValue("@objectName", $"{schema}.{objectName}");
             await using var reader = await cmd.ExecuteReaderAsync();
             var results = new List<ColumnInfo>();
@@ -209,7 +214,7 @@ public partial class SchemaDiscoveryService
                 GROUP BY kc.name, kc.type_desc
                 """;
 
-            await using (var cmd = new SqlCommand(keySql, connection) { CommandTimeout = CommandTimeout })
+            await using (var cmd = new SqlCommand(keySql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds })
             {
                 cmd.Parameters.AddWithValue("@objectName", objectName);
                 await using var reader = await cmd.ExecuteReaderAsync();
@@ -239,7 +244,7 @@ public partial class SchemaDiscoveryService
                 GROUP BY fk.name, rt.schema_id, rt.name
                 """;
 
-            await using (var cmd = new SqlCommand(fkSql, connection) { CommandTimeout = CommandTimeout })
+            await using (var cmd = new SqlCommand(fkSql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds })
             {
                 cmd.Parameters.AddWithValue("@objectName", objectName);
                 await using var reader = await cmd.ExecuteReaderAsync();
@@ -276,7 +281,7 @@ public partial class SchemaDiscoveryService
                 ORDER BY i.name, ic.is_included_column, ic.key_ordinal
                 """;
 
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             cmd.Parameters.AddWithValue("@objectName", $"{schema}.{tableName}");
             await using var reader = await cmd.ExecuteReaderAsync();
 
@@ -322,7 +327,7 @@ public partial class SchemaDiscoveryService
                 ORDER BY s.name, p.name
                 """;
 
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             await using var reader = await cmd.ExecuteReaderAsync();
             var results = new List<StoredProcedureInfo>();
             while (await reader.ReadAsync())
@@ -358,7 +363,7 @@ public partial class SchemaDiscoveryService
                 ORDER BY s.name, o.name
                 """;
 
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             await using var reader = await cmd.ExecuteReaderAsync();
             var results = new List<FunctionInfo>();
             while (await reader.ReadAsync())
@@ -390,7 +395,7 @@ public partial class SchemaDiscoveryService
                 ORDER BY dp.name
                 """;
 
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             await using var reader = await cmd.ExecuteReaderAsync();
             var results = new List<DatabaseUserInfo>();
             while (await reader.ReadAsync())
@@ -418,12 +423,19 @@ public partial class SchemaDiscoveryService
 
             // For views, procedures, functions — use OBJECT_DEFINITION
             const string sql = "SELECT OBJECT_DEFINITION(OBJECT_ID(@objectName))";
-            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = CommandTimeout };
+            await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds };
             cmd.Parameters.AddWithValue("@objectName", $"{schema}.{objectName}");
             var result = await cmd.ExecuteScalarAsync();
+            var definition = result switch
+            {
+                string s => s,
+                DBNull => null,
+                null => null,
+                _ => null
+            };
             return new ObjectScriptResult
             {
-                Definition = result as string
+                Definition = definition
             };
         });
     }
@@ -450,7 +462,7 @@ public partial class SchemaDiscoveryService
             """;
 
         var columns = new List<string>();
-        await using (var cmd = new SqlCommand(colSql, connection) { CommandTimeout = CommandTimeout })
+        await using (var cmd = new SqlCommand(colSql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds })
         {
             cmd.Parameters.AddWithValue("@objectName", objectName);
             await using var reader = await cmd.ExecuteReaderAsync();

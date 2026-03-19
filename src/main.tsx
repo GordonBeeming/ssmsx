@@ -1,14 +1,15 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
-import { ErrorBoundary } from "./components/ErrorBoundary";
+import App from "./app/App";
+import { ErrorBoundary } from "./shared/components/ErrorBoundary";
 import "./index.css";
 
 function Root() {
   useEffect(() => {
     // Disable default browser context menu except on text inputs
     const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
+      if (!(e.target instanceof HTMLElement)) return;
+      const target = e.target;
       const tagName = target.tagName.toLowerCase();
       if (tagName === "input" || tagName === "textarea" || target.isContentEditable) {
         return;
@@ -26,7 +27,10 @@ function Root() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("Root element not found");
+
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <Root />
   </React.StrictMode>,
